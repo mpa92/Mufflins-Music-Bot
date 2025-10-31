@@ -2,30 +2,44 @@ const fs = require('fs');
 const path = require('path');
 const envPath = path.join(__dirname, '..', '.env');
 console.log(`[Config] Loading .env from: ${envPath}`);
-console.log(`[Config] .env file exists: ${fs.existsSync(envPath)}`);
+const envFileExists = fs.existsSync(envPath);
+console.log(`[Config] .env file exists: ${envFileExists}`);
 
-// CRITICAL: Clear the environment variable first to ensure clean state
-if (process.env.LAVALINK_URL) {
-  console.log(`[Config] WARNING: LAVALINK_URL already set in environment: "${process.env.LAVALINK_URL}"`);
-  console.log(`[Config] Deleting it to force reload from .env file...`);
-  delete process.env.LAVALINK_URL;
+// Only try to load .env if the file exists (local development)
+// On Railway/cloud, environment variables are already set via process.env
+let result = { error: null, parsed: {} };
+if (envFileExists) {
+  // CRITICAL: Only clear env vars if .env file exists (local dev only)
+  // On Railway, process.env variables should NOT be deleted
+  if (process.env.LAVALINK_URL && envFileExists) {
+    console.log(`[Config] Local dev: LAVALINK_URL already set in environment: "${process.env.LAVALINK_URL}"`);
+    console.log(`[Config] Local dev: Deleting it to force reload from .env file...`);
+    delete process.env.LAVALINK_URL;
+  }
+
+  // Use override: true to ensure .env file values take precedence over existing env vars (local only)
+  result = require('dotenv').config({ path: envPath, override: true });
+} else {
+  console.log(`[Config] No .env file found - using environment variables from platform (Railway/cloud)`);
 }
 
-// Use override: true to ensure .env file values take precedence over existing env vars
-const result = require('dotenv').config({ path: envPath, override: true });
-
-if (result.error) {
+if (result.error && envFileExists) {
   console.warn('Warning: Could not load .env file:', result.error.message);
-} else {
+} else if (envFileExists) {
   console.log(`[Config] .env loaded successfully (${Object.keys(result.parsed || {}).length} variables)`);
   console.log(`[Config] Dotenv parsed LAVALINK_URL: "${result.parsed?.LAVALINK_URL || 'NOT FOUND'}"`);
   console.log(`[Config] Process.env LAVALINK_URL after dotenv: "${process.env.LAVALINK_URL || 'NOT SET'}"`);
   
-  // Force set it if dotenv parsed it but process.env doesn't have it
+  // Force set it if dotenv parsed it but process.env doesn't have it (local dev only)
   if (result.parsed?.LAVALINK_URL && process.env.LAVALINK_URL !== result.parsed.LAVALINK_URL) {
     console.log(`[Config] WARNING: Mismatch! Forcing process.env.LAVALINK_URL to parsed value...`);
     process.env.LAVALINK_URL = result.parsed.LAVALINK_URL;
   }
+} else {
+  // Cloud deployment - log what we have from process.env
+  console.log(`[Config] Using environment variables from platform:`);
+  console.log(`[Config] LAVALINK_URL from process.env: "${process.env.LAVALINK_URL || 'NOT SET'}"`);
+  console.log(`[Config] TOKEN from process.env: "${process.env.TOKEN ? 'SET' : 'NOT SET'}"`);
 }
 
 const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
