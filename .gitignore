@@ -1,0 +1,24 @@
+node_modules/
+.env
+.DS_Store
+*.log
+
+# Lavalink files (if self-hosting, don't commit)
+Lavalink.jar
+application.yml
+
+# OS files
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# Documentation files
+GITHUB_SETUP.md
+RAILWAY_DEPLOY.md
+
