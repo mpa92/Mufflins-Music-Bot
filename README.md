@@ -6,7 +6,28 @@ A high-performance Discord music bot built with Discord.js and Rainlink, featuri
 
 This bot uses **Rainlink** (similar to Jockie Music's architecture) and **requires a Lavalink server** to work.
 
-## Quick Setup
+## Adding the Bot to Your Server
+
+To invite Mufflins Music Bot to your Discord server, use this link:
+
+**🔗 [Invite Mufflins Music Bot](https://discord.com/api/oauth2/authorize?client_id=1433640357169598568&permissions=3231744&scope=bot)**
+
+The bot will request the following permissions:
+- **Connect** — Join voice channels
+- **Speak** — Play audio in voice channels
+- **Send Messages** — Respond to commands
+- **Embed Links** — Show rich embeds with song info
+- **Read Message History** — Process commands in channels
+
+**Note:** You need **Administrator** or **Manage Server** permissions in the Discord server to add bots.
+
+### After Adding the Bot
+
+1. Make sure the bot has permission to access your voice channel
+2. Use `mm!join` to have the bot join your voice channel
+3. Start playing music with `mm!play song name`
+
+## Quick Setup (For Developers)
 
 ### Prerequisites
 - Node.js 18+ (Node 20 recommended)
