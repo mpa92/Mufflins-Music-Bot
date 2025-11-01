@@ -97,6 +97,9 @@ const preloadedTracks = new Map();
 const autoDisconnectTimers = new Map();
 const AUTO_DISCONNECT_DELAY = 300000; // 5 minutes (300000ms)
 
+// Track guilds that are currently disconnecting to prevent duplicate disconnect commands
+const disconnectingGuilds = new Set();
+
 // Icon path cache (commandName -> iconPath) - loaded once at startup
 const iconCache = new Map();
 
@@ -1440,13 +1443,21 @@ bot.on('messageCreate', async (message) => {
     if (player.state !== 0) { // 0 = CONNECTED
       return void message.reply('Bot is not connected to any voice channel.');
     }
+    
+    // Guard against duplicate execution - prevent multiple disconnect commands
+    const guildId = message.guild.id;
+    if (disconnectingGuilds.has(guildId)) {
+      return; // Already processing disconnect
+    }
+    disconnectingGuilds.add(guildId);
+    
     // Clear auto-disconnect timer and preloaded track immediately
-    const timer = autoDisconnectTimers.get(message.guild.id);
+    const timer = autoDisconnectTimers.get(guildId);
     if (timer) {
       clearTimeout(timer);
-      autoDisconnectTimers.delete(message.guild.id);
+      autoDisconnectTimers.delete(guildId);
     }
-    preloadedTracks.delete(message.guild.id);
+    preloadedTracks.delete(guildId);
     
     // Send response immediately, then disconnect in background
     message.channel.send(buildEmbed('Disconnected', 'Bot has been disconnected from the voice channel.', 'stop')).catch(() => {});
@@ -1454,10 +1465,28 @@ bot.on('messageCreate', async (message) => {
     // Do disconnect asynchronously (non-blocking)
     (async () => {
       try {
-        player.disconnect();
-        await rainlink.destroy(message.guild.id);
+        // Only disconnect the player from voice channel
+        // Use a check to ensure player still exists
+        const currentPlayer = rainlink.players.get(guildId);
+        if (currentPlayer && currentPlayer.state === 0) {
+          currentPlayer.disconnect();
+          // Small delay to ensure disconnect completes
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
+        // Only destroy player after disconnect is complete
+        // Use a check to prevent errors if already destroyed
+        const stillExists = rainlink.players.get(guildId);
+        if (stillExists) {
+          await rainlink.destroy(guildId);
+        }
       } catch (error) {
         console.error('[Rainlink] Error during disconnect cleanup:', error.message);
+      } finally {
+        // Remove from disconnecting set after a short delay
+        setTimeout(() => {
+          disconnectingGuilds.delete(guildId);
+        }, 1000);
       }
     })();
   }
