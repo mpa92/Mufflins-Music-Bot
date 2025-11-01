@@ -49,6 +49,10 @@ const play = require('play-dl');
 const PREFIX = process.env.PREFIX || 'mm!';
 const TOKEN = process.env.TOKEN || '';
 
+// Spotify configuration for play-dl (optional - needed for Spotify URL resolution)
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
+
 // Lavalink configuration (REQUIRED for Rainlink)
 console.log(`[Config] Reading process.env.LAVALINK_URL: "${process.env.LAVALINK_URL || 'NOT SET'}"`);
 const LAVALINK_URL = process.env.LAVALINK_URL || 'localhost:2333';
@@ -410,9 +414,29 @@ async function resolveSpotifyUrl(spotifyUrl) {
 }
 
 // Bot ready event
-bot.once('ready', () => {
+bot.once('ready', async () => {
   console.log(`Logged in as ${bot.user.tag}`);
   bot.user.setActivity('music | mm!help');
+  
+  // Initialize Spotify authorization for play-dl (optional)
+  if (SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET) {
+    try {
+      console.log('[Spotify] Initializing Spotify authorization for play-dl...');
+      await play.authorization({
+        client_id: SPOTIFY_CLIENT_ID,
+        client_secret: SPOTIFY_CLIENT_SECRET,
+        refresh_token: process.env.SPOTIFY_REFRESH_TOKEN || '',
+        market: process.env.SPOTIFY_MARKET || 'US'
+      });
+      console.log('[Spotify] Authorization successful - Spotify URL resolution enabled');
+    } catch (error) {
+      console.warn(`[Spotify] Failed to authorize play-dl with Spotify: ${error.message}`);
+      console.warn('[Spotify] Spotify URL resolution will not work. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to enable it.');
+    }
+  } else {
+    console.warn('[Spotify] Spotify credentials not provided. Spotify URL resolution will not work.');
+    console.warn('[Spotify] To enable: Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables.');
+  }
   
   // Load icon cache at startup (one-time operation, much faster than per-command file reads)
   loadIconCache();
@@ -932,19 +956,28 @@ bot.on('messageCreate', async (message) => {
     const isSpotifyUrl = /https?:\/\/(?:open|play)\.spotify\.com\//.test(query);
     if (isSpotifyUrl) {
       console.log(`[Rainlink] Detected Spotify URL, resolving to YouTube search query...`);
+      
+      // Check if Spotify credentials are configured
+      if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
+        await message.channel.send(`⚠️ **Spotify URL resolution not configured.**\n\nTo enable Spotify URL playback, you need to:\n1. Create a Spotify app at https://developer.spotify.com/dashboard\n2. Set \`SPOTIFY_CLIENT_ID\` and \`SPOTIFY_CLIENT_SECRET\` environment variables\n\n**Workaround:** Search for the song name manually instead of using the Spotify URL.`).catch(() => {});
+        return; // Don't try to play Spotify URLs without credentials
+      }
+      
       try {
+        await message.channel.send(`🔍 Resolving Spotify track...`).catch(() => {});
         const resolvedQuery = await resolveSpotifyUrl(query);
         if (resolvedQuery) {
           query = resolvedQuery;
           console.log(`[Rainlink] Spotify URL resolved, new query: "${query}"`);
-          await message.channel.send(`🔍 Resolving Spotify track...`).catch(() => {});
         } else {
-          console.warn(`[Rainlink] Could not resolve Spotify URL, will try as-is (likely to fail)`);
-          // Fallback: still try the original URL, but it will likely fail
+          console.warn(`[Rainlink] Could not resolve Spotify URL`);
+          await message.channel.send(`❌ Could not resolve Spotify track. Please try searching for the song name instead.`).catch(() => {});
+          return; // Don't try the original URL as it will fail
         }
       } catch (error) {
         console.error(`[Rainlink] Error resolving Spotify URL:`, error.message);
-        // Continue with original query (will likely fail)
+        await message.channel.send(`❌ Error resolving Spotify track: ${error.message}. Please try searching for the song name instead.`).catch(() => {});
+        return; // Don't try the original URL as it will fail
       }
     }
     

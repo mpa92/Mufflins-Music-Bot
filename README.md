@@ -54,6 +54,11 @@ LAVALINK_URL=lavalinkv4-id.serenetia.com:443
 LAVALINK_PASSWORD=lavalink
 LAVALINK_SECURE=true
 LAVALINK_NAME=serenetia
+
+# Optional: Spotify URL resolution (enables playing Spotify URLs by converting them to YouTube)
+# Get credentials from https://developer.spotify.com/dashboard
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 ```
 
 **Alternative Public Servers** (if current server has issues):
@@ -268,7 +273,7 @@ mm!dc                       # Disconnect bot
 
 ## Notes
 
-- Spotify tracks are resolved to YouTube equivalents via Lavalink
+- **Spotify URLs**: To play Spotify URLs, you need Spotify API credentials (SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET). The bot converts Spotify URLs to YouTube searches using `play-dl`. Without credentials, users should search for song names instead.
 - The bot automatically handles voice channel permissions
 - All commands are optimized for speed with instant feedback
 - Search results are cached to reduce API calls
