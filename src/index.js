@@ -44,6 +44,8 @@ if (result.error && envFileExists) {
 
 const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 const { Rainlink, Library } = require('rainlink');
+const fs = require('fs');
+const path = require('path');
 
 // Monkey-patch readline to auto-answer play-dl prompts BEFORE requiring play-dl
 // play-dl prompts "Do you want to save data in a file? (Yes / No):" and we need to auto-answer "Yes"
@@ -54,14 +56,28 @@ readline.createInterface = function(options) {
   const originalQuestion = rl.question;
   
   rl.question = function(prompt, callback) {
+    const promptStr = typeof prompt === 'string' ? prompt : String(prompt);
+    console.log(`[Spotify] Readline prompt intercepted: "${promptStr.trim()}"`);
+    
     // Auto-answer "Yes" for file save prompts
-    if (typeof prompt === 'string' && (prompt.includes('save data in a file') || prompt.includes('Yes / No'))) {
-      console.log(`[Spotify] Auto-answering prompt: "${prompt.trim()}" with "Yes"`);
+    if (promptStr.includes('save data in a file') || promptStr.includes('Yes / No')) {
+      console.log(`[Spotify] Auto-answering with "Yes"`);
       // Use setImmediate to avoid recursion
       setImmediate(() => callback('Yes'));
       return;
     }
-    // For other prompts, use original behavior
+    
+    // Auto-answer file path prompts (play-dl might ask where to save)
+    // Use a default path that's writable in Railway
+    if (promptStr.toLowerCase().includes('path') || promptStr.toLowerCase().includes('file') || promptStr.toLowerCase().includes('where')) {
+      const defaultPath = '/tmp/play-dl-spotify-data.json';
+      console.log(`[Spotify] Auto-answering file path prompt with: "${defaultPath}"`);
+      setImmediate(() => callback(defaultPath));
+      return;
+    }
+    
+    // For other prompts, use original behavior (but log them)
+    console.log(`[Spotify] Passing through prompt: "${promptStr.trim()}"`);
     return originalQuestion.call(this, prompt, callback);
   };
   
@@ -396,17 +412,25 @@ async function resolveSpotifyUrl(spotifyUrl) {
     }
     
     // Re-authorize if needed (play-dl might need fresh tokens)
+    // play-dl requires authorization before each spotify() call in some cases
     if (SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET) {
       try {
-        await play.authorization({
+        console.log(`[Spotify] Re-authorizing before spotify() call...`);
+        const authResult = await play.authorization({
           client_id: SPOTIFY_CLIENT_ID,
           client_secret: SPOTIFY_CLIENT_SECRET,
           refresh_token: process.env.SPOTIFY_REFRESH_TOKEN || '',
           market: process.env.SPOTIFY_MARKET || 'US'
         });
-        console.log(`[Spotify] Re-authorized successfully`);
+        console.log(`[Spotify] Re-authorization completed. Result:`, authResult ? typeof authResult : 'undefined');
+        
+        // Give play-dl a moment to save the authorization data
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log(`[Spotify] Waited for token persistence, proceeding with spotify() call...`);
       } catch (authError) {
-        console.warn(`[Spotify] Re-authorization failed (might be OK if already authorized): ${authError.message}`);
+        console.error(`[Spotify] Re-authorization failed: ${authError.message}`);
+        console.error(`[Spotify] Error details:`, authError);
+        throw authError; // Re-throw so we don't continue if auth failed
       }
     }
     
@@ -493,9 +517,41 @@ bot.once('ready', async () => {
         market: process.env.SPOTIFY_MARKET || 'US'
       });
       
+      // Wait a moment for play-dl to complete saving authorization data
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Check if authorization data was saved (play-dl typically saves to a file)
+      // Common locations: process.cwd() + '/.play-dl/', or home directory
+      const possiblePaths = [
+        path.join(process.cwd(), '.play-dl'),
+        path.join(process.cwd(), 'play-dl.json'),
+        path.join(process.env.HOME || '/tmp', '.play-dl'),
+        '/tmp/.play-dl',
+        '/tmp/play-dl-spotify-data.json'
+      ];
+      
+      let authFileFound = false;
+      for (const checkPath of possiblePaths) {
+        try {
+          if (fs.existsSync(checkPath)) {
+            console.log(`[Spotify] Found authorization data at: ${checkPath}`);
+            authFileFound = true;
+            break;
+          }
+        } catch (e) {
+          // Ignore errors checking paths
+        }
+      }
+      
+      if (!authFileFound) {
+        console.warn(`[Spotify] ⚠️ Authorization data file not found in common locations. This might cause issues.`);
+        console.warn(`[Spotify] play-dl might save data in a different location or use in-memory storage.`);
+      }
+      
       spotifyAuthorized = true;
       console.log('[Spotify] ✅ Authorization successful - Spotify URL resolution enabled');
-      console.log(`[Spotify] Authorization result:`, authResult ? 'OK' : 'Unknown');
+      console.log(`[Spotify] Authorization result:`, authResult ? typeof authResult : 'undefined/null');
+      console.log(`[Spotify] Authorization file found: ${authFileFound ? 'Yes' : 'No (may use in-memory)'}`);
     } catch (error) {
       spotifyAuthorized = false;
       console.error(`[Spotify] ❌ Failed to authorize play-dl with Spotify: ${error.message}`);
