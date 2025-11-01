@@ -60,14 +60,31 @@ readline.createInterface = function(options) {
     // Auto-answer "Yes" for file save prompts
     if (promptStr.includes('save data in a file') || promptStr.includes('Yes / No')) {
       console.log(`[Spotify] Auto-answering with "Yes"`);
-      setImmediate(() => callback('Yes'));
+      // Use process.nextTick instead of setImmediate to avoid timing issues
+      process.nextTick(() => callback('Yes'));
       return;
     }
     
     // Auto-answer "sp" for Spotify service selection
     if (promptStr.includes('Choose your service') && promptStr.includes('Spotify')) {
       console.log(`[Spotify] Auto-answering service selection with "sp" (Spotify)`);
-      setImmediate(() => callback('sp'));
+      process.nextTick(() => callback('sp'));
+      return;
+    }
+    
+    // Auto-answer Client ID prompt (play-dl asks for it during authorization)
+    if (promptStr.includes('Client ID') || promptStr.includes('client ID') || promptStr.includes('Start by entering')) {
+      const clientId = SPOTIFY_CLIENT_ID || '';
+      console.log(`[Spotify] Auto-answering Client ID prompt with Client ID`);
+      process.nextTick(() => callback(clientId));
+      return;
+    }
+    
+    // Auto-answer Client Secret prompt (might come after Client ID)
+    if (promptStr.includes('Client Secret') || promptStr.includes('client secret')) {
+      const clientSecret = SPOTIFY_CLIENT_SECRET || '';
+      console.log(`[Spotify] Auto-answering Client Secret prompt`);
+      process.nextTick(() => callback(clientSecret));
       return;
     }
     
@@ -76,7 +93,7 @@ readline.createInterface = function(options) {
     if (promptStr.toLowerCase().includes('path') || (promptStr.toLowerCase().includes('file') && promptStr.toLowerCase().includes('where'))) {
       const defaultPath = '/tmp/play-dl-spotify-data.json';
       console.log(`[Spotify] Auto-answering file path prompt with: "${defaultPath}"`);
-      setImmediate(() => callback(defaultPath));
+      process.nextTick(() => callback(defaultPath));
       return;
     }
     
