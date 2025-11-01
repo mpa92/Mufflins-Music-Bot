@@ -1068,9 +1068,34 @@ bot.on('messageCreate', async (message) => {
             console.log(`[Rainlink] Source: ${sourceName}`);
             
             // Use player.search() - returns proper RainlinkTrack objects
-            searchResult = await player.search(currentSearchQuery, {
+            // Add timeout for Spotify URLs which can take a while to resolve
+            const searchTimeout = isUrl && currentSearchQuery.includes('spotify.com') ? 45000 : 30000; // 45s for Spotify, 30s for others
+            
+            console.log(`[Rainlink] Search timeout set to: ${searchTimeout}ms`);
+            
+            const searchPromise = player.search(currentSearchQuery, {
               requester: message.author
             });
+            
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => {
+                reject(new Error(`Search timed out after ${searchTimeout}ms. Spotify URLs may take longer to resolve.`));
+              }, searchTimeout);
+            });
+            
+            try {
+              searchResult = await Promise.race([searchPromise, timeoutPromise]);
+              console.log(`[Rainlink] Search completed successfully`);
+            } catch (timeoutError) {
+              console.error(`[Rainlink] Search timed out or failed:`, timeoutError.message);
+              if (timeoutError.message.includes('timed out') && searchAttempts < maxSearchAttempts - 1) {
+                console.log(`[Rainlink] Retrying search after timeout...`);
+                searchResult = null;
+                searchAttempts++;
+                continue;
+              }
+              throw timeoutError;
+            }
             
             // Cache the result if it's not a URL and cache isn't full
             if (cacheKey && searchResult && searchResult.tracks && searchResult.tracks.length > 0) {
