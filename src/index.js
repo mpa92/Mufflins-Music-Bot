@@ -44,6 +44,30 @@ if (result.error && envFileExists) {
 
 const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 const { Rainlink, Library } = require('rainlink');
+
+// Monkey-patch readline to auto-answer play-dl prompts BEFORE requiring play-dl
+// play-dl prompts "Do you want to save data in a file? (Yes / No):" and we need to auto-answer "Yes"
+const readline = require('readline');
+const originalCreateInterface = readline.createInterface;
+readline.createInterface = function(options) {
+  const rl = originalCreateInterface.call(this, options);
+  const originalQuestion = rl.question;
+  
+  rl.question = function(prompt, callback) {
+    // Auto-answer "Yes" for file save prompts
+    if (typeof prompt === 'string' && (prompt.includes('save data in a file') || prompt.includes('Yes / No'))) {
+      console.log(`[Spotify] Auto-answering prompt: "${prompt.trim()}" with "Yes"`);
+      // Use setImmediate to avoid recursion
+      setImmediate(() => callback('Yes'));
+      return;
+    }
+    // For other prompts, use original behavior
+    return originalQuestion.call(this, prompt, callback);
+  };
+  
+  return rl;
+};
+
 const play = require('play-dl');
 
 const PREFIX = process.env.PREFIX || 'mm!';
@@ -458,12 +482,17 @@ bot.once('ready', async () => {
     try {
       console.log('[Spotify] Initializing Spotify authorization for play-dl...');
       console.log(`[Spotify] Using Client ID: ${SPOTIFY_CLIENT_ID.substring(0, 8)}...`);
+      
+      // readline is already monkey-patched above to auto-answer prompts
+      console.log('[Spotify] Starting authorization (prompts will be auto-answered)...');
+      
       const authResult = await play.authorization({
         client_id: SPOTIFY_CLIENT_ID,
         client_secret: SPOTIFY_CLIENT_SECRET,
         refresh_token: process.env.SPOTIFY_REFRESH_TOKEN || '',
         market: process.env.SPOTIFY_MARKET || 'US'
       });
+      
       spotifyAuthorized = true;
       console.log('[Spotify] ✅ Authorization successful - Spotify URL resolution enabled');
       console.log(`[Spotify] Authorization result:`, authResult ? 'OK' : 'Unknown');
