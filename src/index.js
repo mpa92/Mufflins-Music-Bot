@@ -70,6 +70,14 @@ if (!TOKEN) {
 // Parse Lavalink URL (host:port)
 const [lavalinkHost, lavalinkPort = LAVALINK_SECURE ? '443' : '2333'] = LAVALINK_URL.split(':');
 
+// Debug: Log parsed connection details
+console.log(`[Config] Parsed connection details:`);
+console.log(`[Config] Host: ${lavalinkHost}`);
+console.log(`[Config] Port: ${lavalinkPort}`);
+console.log(`[Config] Secure: ${LAVALINK_SECURE}`);
+console.log(`[Config] Password: ${LAVALINK_PASSWORD ? 'SET' : 'NOT SET'}`);
+console.log(`[Config] Node Name: ${LAVALINK_NAME}`);
+
 // Initialize bot client
 const bot = new Client({
   intents: [
@@ -435,6 +443,13 @@ bot.once('ready', () => {
       console.log(`[Rainlink] Manager ID before adding node: ${rainlink.id}`);
       
       try {
+        console.log(`[Rainlink] Attempting to add node with config:`);
+        console.log(`[Rainlink]   Name: ${LAVALINK_NAME}`);
+        console.log(`[Rainlink]   Host: ${lavalinkHost}`);
+        console.log(`[Rainlink]   Port: ${parseInt(lavalinkPort)}`);
+        console.log(`[Rainlink]   Secure: ${LAVALINK_SECURE}`);
+        console.log(`[Rainlink]   Auth: ${LAVALINK_PASSWORD ? 'SET' : 'NOT SET'}`);
+        
         const addedNode = rainlink.nodes.add({
           name: LAVALINK_NAME,
           host: lavalinkHost,
@@ -446,6 +461,7 @@ bot.once('ready', () => {
         console.log(`[Rainlink] Manager ID after adding node: ${rainlink.id}`);
       } catch (err) {
         console.error(`[Rainlink] Failed to add node:`, err);
+        console.error(`[Rainlink] Error details:`, err.message);
       }
     } else {
       console.log(`[Rainlink] Nodes already configured: ${nodes.length}`);
@@ -499,6 +515,16 @@ bot.once('ready', () => {
         
         console.warn(`[Rainlink] ⚠️ Disconnected from Lavalink node: ${nodeName} - Reason: ${reason}`);
         console.warn(`[Rainlink] Manager ID at disconnect: ${rainlink.id}`);
+        console.warn(`[Rainlink] Connection details: ${lavalinkHost}:${lavalinkPort} (secure: ${LAVALINK_SECURE})`);
+        
+        // Log connection details for debugging
+        if (reason === 1000 || reason === '1000') {
+          console.warn(`[Rainlink] Normal WebSocket close (1000) - may indicate:`);
+          console.warn(`[Rainlink]   1. Lavalink service not running or crashed`);
+          console.warn(`[Rainlink]   2. Network connectivity issue (if using internal networking, check service name)`);
+          console.warn(`[Rainlink]   3. Wrong host/port configuration`);
+          console.warn(`[Rainlink]   4. Authentication failure (check password)`);
+        }
         
         // If running on Railway and getting rapid disconnects, likely rate-limiting from server
         if (isRailway && consecutiveDisconnects >= 3) {
