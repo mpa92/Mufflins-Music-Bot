@@ -1086,6 +1086,13 @@ bot.on('messageCreate', async (message) => {
             try {
               searchResult = await Promise.race([searchPromise, timeoutPromise]);
               console.log(`[Rainlink] Search completed successfully`);
+              console.log(`[Rainlink] Search result received:`, {
+                hasResult: !!searchResult,
+                hasTracks: !!(searchResult?.tracks),
+                tracksLength: searchResult?.tracks?.length || 0,
+                resultType: searchResult?.type || 'N/A',
+                firstTrackTitle: searchResult?.tracks?.[0]?.title || 'N/A'
+              });
             } catch (timeoutError) {
               console.error(`[Rainlink] Search timed out or failed:`, timeoutError.message);
               if (timeoutError.message.includes('timed out') && searchAttempts < maxSearchAttempts - 1) {
@@ -1121,7 +1128,18 @@ bot.on('messageCreate', async (message) => {
               console.log(`[Rainlink] First track type: ${searchResult.tracks[0]?.constructor?.name || typeof searchResult.tracks[0]}`);
             }
             break; // Success, exit retry loop
-          } else if (searchAttempts < searchSources.length - 1) {
+          } else {
+            // No tracks in result - log details
+            console.warn(`[Rainlink] Search completed but no tracks found. Result:`, {
+              hasResult: !!searchResult,
+              resultType: searchResult?.type || 'N/A',
+              hasTracks: !!(searchResult?.tracks),
+              tracksLength: searchResult?.tracks?.length || 0,
+              resultKeys: searchResult ? Object.keys(searchResult) : []
+            });
+          }
+          
+          if (searchAttempts < searchSources.length - 1) {
             // No results but we have more sources to try
             const currentSourceName = searchSources[searchAttempts] === `ytsearch:${query}` ? 'YouTube' : 
                                      searchSources[searchAttempts] === `scsearch:${query}` ? 'SoundCloud' : 'Auto-detect';
