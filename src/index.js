@@ -375,18 +375,45 @@ bot.once('ready', () => {
     // Initialize Rainlink with Discord.js library connector
     console.log(`[Rainlink] Initializing with node: ${lavalinkHost}:${lavalinkPort}`);
     
-    // Create library connector and verify it can get user ID immediately
-    const libraryConnector = new Library.DiscordJS(bot);
-    const testUserId = libraryConnector.getId();
-    console.log(`[Rainlink] Library connector created, test getId(): ${testUserId}`);
-    
-    if (!testUserId || testUserId === 'undefined') {
-      console.error('[Rainlink] ERROR: Library connector cannot get user ID! Delaying initialization...');
+    // CRITICAL: Verify bot.user.id is definitely available before creating connector
+    if (!bot.user || !bot.user.id) {
+      console.error('[Rainlink] ERROR: bot.user.id not available! Waiting...');
       setTimeout(() => {
-        initializeRainlink();
-      }, 3000);
+        if (!bot.user || !bot.user.id) {
+          console.error('[Rainlink] ERROR: bot.user.id still not available after wait!');
+          return;
+        }
+        initializeRainlinkDelayed();
+      }, 2000);
       return;
     }
+    
+    console.log(`[Rainlink] Bot user confirmed: ${bot.user.id}`);
+    
+    // Create library connector and verify it can get user ID immediately
+    const libraryConnector = new Library.DiscordJS(bot);
+    
+    // Test the connector multiple times to ensure it works
+    let testUserId = libraryConnector.getId();
+    console.log(`[Rainlink] Library connector created, test getId(): ${testUserId}`);
+    
+    // Verify the connector returns the correct ID
+    if (!testUserId || testUserId === 'undefined' || testUserId.toString() !== bot.user.id.toString()) {
+      console.error('[Rainlink] ERROR: Library connector ID mismatch!');
+      console.error(`[Rainlink] Expected: ${bot.user.id}, Got: ${testUserId}`);
+      console.error('[Rainlink] Delaying initialization...');
+      setTimeout(() => {
+        testUserId = libraryConnector.getId();
+        if (!testUserId || testUserId.toString() !== bot.user.id.toString()) {
+          console.error('[Rainlink] ERROR: Library connector still broken after wait!');
+          return;
+        }
+        initializeRainlinkDelayed();
+      }, 2000);
+      return;
+    }
+    
+    console.log(`[Rainlink] Library connector verified - ID: ${testUserId}`);
     
     initializeRainlink();
     
