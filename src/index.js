@@ -1086,13 +1086,22 @@ bot.on('messageCreate', async (message) => {
             try {
               searchResult = await Promise.race([searchPromise, timeoutPromise]);
               console.log(`[Rainlink] Search completed successfully`);
-              console.log(`[Rainlink] Search result received:`, {
-                hasResult: !!searchResult,
-                hasTracks: !!(searchResult?.tracks),
-                tracksLength: searchResult?.tracks?.length || 0,
-                resultType: searchResult?.type || 'N/A',
-                firstTrackTitle: searchResult?.tracks?.[0]?.title || 'N/A'
-              });
+              console.log(`[Rainlink] Search result type: ${typeof searchResult}`);
+              console.log(`[Rainlink] Search result is null/undefined: ${searchResult === null || searchResult === undefined}`);
+              
+              if (searchResult) {
+                console.log(`[Rainlink] Search result has tracks property: ${!!searchResult.tracks}`);
+                console.log(`[Rainlink] Search result tracks type: ${Array.isArray(searchResult.tracks) ? 'array' : typeof searchResult.tracks}`);
+                console.log(`[Rainlink] Search result tracks length: ${searchResult.tracks?.length || 0}`);
+                console.log(`[Rainlink] Search result type field: ${searchResult.type || 'N/A'}`);
+                if (searchResult.tracks && searchResult.tracks.length > 0) {
+                  console.log(`[Rainlink] First track title: ${searchResult.tracks[0]?.title || 'N/A'}`);
+                } else {
+                  console.warn(`[Rainlink] No tracks in result. Full result keys: ${Object.keys(searchResult).join(', ')}`);
+                }
+              } else {
+                console.error(`[Rainlink] Search result is null or undefined!`);
+              }
             } catch (timeoutError) {
               console.error(`[Rainlink] Search timed out or failed:`, timeoutError.message);
               if (timeoutError.message.includes('timed out') && searchAttempts < maxSearchAttempts - 1) {
