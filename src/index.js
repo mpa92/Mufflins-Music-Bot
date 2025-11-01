@@ -393,9 +393,29 @@ bot.once('ready', () => {
     // Create library connector and verify it can get user ID immediately
     const libraryConnector = new Library.DiscordJS(bot);
     
-    // Test the connector multiple times to ensure it works
+    // CRITICAL PATCH: Override getId() to ensure it ALWAYS returns the correct ID
+    // This prevents Rainlink from getting undefined during WebSocket handshake
+    const originalGetId = libraryConnector.getId.bind(libraryConnector);
+    const botUserId = bot.user.id; // Capture the ID now
+    
+    libraryConnector.getId = function() {
+      const id = originalGetId();
+      // If the original returns undefined/null, use our captured ID
+      if (!id || id === 'undefined' || id === null) {
+        console.warn(`[Rainlink] Library connector getId() returned ${id}, using captured ID: ${botUserId}`);
+        return botUserId;
+      }
+      // Verify it matches our bot user ID
+      if (id.toString() !== botUserId.toString()) {
+        console.warn(`[Rainlink] Library connector ID mismatch (${id} vs ${botUserId}), using captured ID`);
+        return botUserId;
+      }
+      return id;
+    };
+    
+    // Test the patched connector multiple times to ensure it works
     let testUserId = libraryConnector.getId();
-    console.log(`[Rainlink] Library connector created, test getId(): ${testUserId}`);
+    console.log(`[Rainlink] Library connector created and patched, test getId(): ${testUserId}`);
     
     // Verify the connector returns the correct ID
     if (!testUserId || testUserId === 'undefined' || testUserId.toString() !== bot.user.id.toString()) {
