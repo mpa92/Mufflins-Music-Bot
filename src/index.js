@@ -60,14 +60,20 @@ readline.createInterface = function(options) {
     // Auto-answer "Yes" for file save prompts
     if (promptStr.includes('save data in a file') || promptStr.includes('Yes / No')) {
       console.log(`[Spotify] Auto-answering with "Yes"`);
-      // Use setImmediate to avoid recursion
       setImmediate(() => callback('Yes'));
+      return;
+    }
+    
+    // Auto-answer "sp" for Spotify service selection
+    if (promptStr.includes('Choose your service') && promptStr.includes('Spotify')) {
+      console.log(`[Spotify] Auto-answering service selection with "sp" (Spotify)`);
+      setImmediate(() => callback('sp'));
       return;
     }
     
     // Auto-answer file path prompts (play-dl might ask where to save)
     // Use a default path that's writable in Railway
-    if (promptStr.toLowerCase().includes('path') || promptStr.toLowerCase().includes('file') || promptStr.toLowerCase().includes('where')) {
+    if (promptStr.toLowerCase().includes('path') || (promptStr.toLowerCase().includes('file') && promptStr.toLowerCase().includes('where'))) {
       const defaultPath = '/tmp/play-dl-spotify-data.json';
       console.log(`[Spotify] Auto-answering file path prompt with: "${defaultPath}"`);
       setImmediate(() => callback(defaultPath));
