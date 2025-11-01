@@ -841,10 +841,24 @@ bot.on('messageCreate', async (message) => {
   }
 
   if (command === 'play' || command === 'p') {
-    // Get query from original message content to avoid corruption
-    const fullContent = message.content.trim();
-    const commandMatch = fullContent.match(new RegExp(`^${PREFIX}(?:play|p)\\s+(.+)$`, 'i'));
-    const query = commandMatch ? commandMatch[1].trim() : args.join(' ').trim();
+    // Get query - use args which should already have command removed
+    // Args are parsed as: message.content.slice(PREFIX.length).trim().split(/\s+/) then command is shifted
+    // So args should only contain the query, not the command
+    let query = args.join(' ').trim();
+    
+    // Fallback: if args are empty or query seems wrong, try regex extraction
+    if (!query || query.startsWith('!') || query.startsWith(PREFIX)) {
+      const fullContent = message.content.trim();
+      // Escape special regex characters in PREFIX
+      const escapedPrefix = PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const commandMatch = fullContent.match(new RegExp(`^${escapedPrefix}(?:play|p)\\s+(.+)$`, 'i'));
+      if (commandMatch) {
+        query = commandMatch[1].trim();
+      }
+    }
+    
+    // Clean up any leftover command prefixes that might have slipped through
+    query = query.replace(/^!?\w+\s+/, '').trim();
     
     if (!query) return void message.reply('Provide a YouTube/Spotify link or search text.');
     
