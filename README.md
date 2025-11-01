@@ -31,11 +31,21 @@ The bot will request the following permissions:
 
 ### Prerequisites
 - Node.js 18+ (Node 20 recommended)
-- Java 17+ (only if self-hosting Lavalink)
+- Java 17+ (only if self-hosting Lavalink locally)
 - Discord Bot Token
 
-### Option 1: Use Public Lavalink (Easiest)
+### Deployment Strategy
 
+**For Railway Deployment (Recommended):**
+1. Deploy bot from this repository to Railway
+2. Deploy Lavalink from separate `lavalink-server` repository to Railway
+3. Connect bot to your Lavalink service using Railway's internal networking
+
+This approach eliminates rate-limiting issues and provides the best stability.
+
+### Option 1: Use Public Lavalink (Easiest - but may have rate-limiting)
+
+**Current Server (Serenetia):**
 1. Create `.env` file:
 ```env
 TOKEN=YOUR_DISCORD_BOT_TOKEN
@@ -46,18 +56,43 @@ LAVALINK_SECURE=true
 LAVALINK_NAME=serenetia
 ```
 
+**Alternative Public Servers** (if current server has issues):
+
+**Option A - AjieDev's Free Lavalink:**
+Check [AjieDev's GitHub](https://github.com/AjieDev/Free-Lavalink) for current connection details. Example:
+```env
+TOKEN=YOUR_DISCORD_BOT_TOKEN
+PREFIX=mm!
+LAVALINK_URL=lavalink.ajie.eu.org:443
+LAVALINK_PASSWORD=ajieisajie
+LAVALINK_SECURE=true
+LAVALINK_NAME=ajiedev
+```
+
+**Option B - Find Current Servers:**
+Visit [Lavalink List](https://lavainfo.netlify.app/) or check Discord communities for active public Lavalink servers.
+
+**Important Notes:**
+- Public servers may rate-limit if you make too many connection attempts
+- If using Railway, consider self-hosting Lavalink to avoid rate-limiting issues
+- Always check server status and usage policies before connecting
+
 2. Install and run:
 ```bash
 npm install
 npm start
 ```
 
+**For Railway Deployment:**
+Update your Railway environment variables with the new server details instead of creating a `.env` file.
+
 ### Option 2: Self-Hosted Lavalink
 
-**Quick steps:**
+**Option 2A: Local Self-Hosting**
+
 1. Download Lavalink v4 from [GitHub Releases](https://github.com/lavalink-devs/Lavalink/releases)
-2. Create `application.yml` with your Lavalink configuration
-3. Run: `java -jar Lavalink.jar`
+2. Use `lavalink-server/application.yml` as your configuration
+3. Run: `java -jar lavalink-server/Lavalink.jar`
 4. Configure `.env` with:
 ```env
 TOKEN=YOUR_DISCORD_BOT_TOKEN
@@ -68,6 +103,67 @@ LAVALINK_SECURE=false
 LAVALINK_NAME=default
 ```
 5. Run bot: `npm start`
+
+**Option 2B: Deploy Lavalink on Railway (Recommended for Railway users)**
+
+Deploy Lavalink as a separate Railway service to avoid public server rate-limiting. This is the **recommended solution** if you're experiencing disconnect issues with public servers.
+
+### Method 1: Deploy from Separate GitHub Repo (Recommended)
+
+1. **Create a new GitHub repository** for Lavalink:
+   - Create a repo (e.g., `lavalink-server`)
+   - Upload the contents of the `lavalink-server` directory from this project
+   - See `lavalink-server/README.md` for detailed setup
+
+2. **Deploy Lavalink service on Railway:**
+   - Create new Railway project or add service to existing project
+   - Select "Deploy from GitHub repo"
+   - Choose your `lavalink-server` repository
+   - Railway will auto-detect the service
+   - **Start Command**: `java -jar Lavalink.jar` (set in Settings → Deploy)
+   - Optional: Set `JAVA_OPTS=-Xmx512M` environment variable
+
+3. **Get your Lavalink service URL:**
+   - Wait for deployment to complete
+   - Go to Settings → Networking
+   - Copy the **Public Domain** URL (e.g., `lavalink-production.up.railway.app`)
+
+4. **Update bot's Railway environment variables:**
+   - Go to your bot service on Railway
+   - Navigate to Variables tab
+   - Update these variables:
+     ```env
+     LAVALINK_URL=<your-lavalink-service>.railway.app:443
+     LAVALINK_PASSWORD=youshallnotpass
+     LAVALINK_SECURE=true
+     LAVALINK_NAME=railway-lavalink
+     ```
+   - Replace `<your-lavalink-service>` with your actual Railway service URL
+
+### Method 2: Use Railway Internal Networking (Same Project)
+
+If both services are in the **same Railway project**, you can use internal networking:
+
+1. Deploy Lavalink service (from Method 1, steps 1-2)
+2. Note your Lavalink service name (e.g., `lavalink`)
+3. Update bot's environment variables:
+   ```env
+   LAVALINK_URL=lavalink:2333
+   LAVALINK_PASSWORD=youshallnotpass
+   LAVALINK_SECURE=false
+   LAVALINK_NAME=railway-lavalink
+   ```
+   Replace `lavalink` with your actual service name
+
+**Benefits:**
+- ✅ No rate-limiting from public servers
+- ✅ Full control over configuration
+- ✅ Both services in same Railway project
+- ✅ More stable and reliable
+- ✅ Faster connection with internal networking
+- ✅ No public exposure needed (if using internal networking)
+
+**Cost**: Railway free tier includes $5/month credit - usually enough for both services!
 
 ## Commands
 

@@ -3,9 +3,9 @@ node_modules/
 .DS_Store
 *.log
 
-# Lavalink files (if self-hosting, don't commit)
-Lavalink.jar
-application.yml
+# Lavalink files (moved to lavalink-server directory)
+# The lavalink-server directory should be uploaded separately to Railway as a separate repository
+lavalink-server/
 
 # OS files
 Thumbs.db

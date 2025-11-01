@@ -85,6 +85,7 @@ const bot = new Client({
 // We'll initialize it after bot is ready since it needs the bot client
 let rainlink;
 
+
 // Search cache for faster repeated searches
 const searchCache = new Map();
 const CACHE_MAX_AGE = 300000; // 5 minutes
@@ -99,6 +100,85 @@ const AUTO_DISCONNECT_DELAY = 300000; // 5 minutes (300000ms)
 
 // Track guilds that are currently disconnecting to prevent duplicate disconnect commands
 const disconnectingGuilds = new Set();
+
+// Helper function to ensure node is ready (connected and session initialized)
+async function ensureNodeReady(rainlink, nodeName, maxWaitTime = 10000) {
+  const node = rainlink.nodes.get(nodeName) || rainlink.nodes.all()[0];
+  if (!node) {
+    throw new Error('No Lavalink node available');
+  }
+  
+  // Check if node is connected (state 0 = Connected)
+  if (node.state === 0 && node.online) {
+    // Give it a brief moment for session to initialize (even if already connected)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return true;
+  }
+  
+  // Wait for node to connect
+  const startTime = Date.now();
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+    let nodeConnectHandler = null;
+    
+    const resolveOnce = () => {
+      if (resolved) return;
+      resolved = true;
+      // Give it a moment for session to initialize after connection
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+        if (nodeConnectHandler) {
+          rainlink.off('nodeConnect', nodeConnectHandler);
+        }
+        resolve(true);
+      }, 500);
+    };
+    
+    const checkInterval = setInterval(() => {
+      if (node.state === 0 && node.online) {
+        resolveOnce();
+      }
+      
+      if (Date.now() - startTime > maxWaitTime) {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+        if (nodeConnectHandler) {
+          rainlink.off('nodeConnect', nodeConnectHandler);
+        }
+        if (!resolved) {
+          resolved = true;
+          reject(new Error('Node connection timeout'));
+        }
+      }
+    }, 100);
+    
+    const timeout = setTimeout(() => {
+      clearInterval(checkInterval);
+      if (nodeConnectHandler) {
+        rainlink.off('nodeConnect', nodeConnectHandler);
+      }
+      if (!resolved) {
+        resolved = true;
+        reject(new Error('Node ready check timeout'));
+      }
+    }, maxWaitTime);
+    
+    // Also listen for nodeConnect event
+    nodeConnectHandler = (connectedNode) => {
+      if (connectedNode === node || connectedNode.options?.name === nodeName) {
+        resolveOnce();
+      }
+    };
+    
+    rainlink.on('nodeConnect', nodeConnectHandler);
+    
+    // If already connected, resolve immediately
+    if (node.state === 0 && node.online) {
+      resolveOnce();
+    }
+  });
+}
 
 // Icon path cache (commandName -> iconPath) - loaded once at startup
 const iconCache = new Map();
@@ -323,12 +403,12 @@ bot.once('ready', () => {
       console.log(`[Rainlink] Rainlink initialized. Bot user ID: ${bot.user?.id || 'NOT AVAILABLE'}`);
       console.log(`[Rainlink] Nodes found: ${rainlink.nodes.all().length}`);
       
-      // CRITICAL FIX: Manually update manager.id if it's undefined
-      // Rainlink's ready() method might have cached undefined before bot.user.id was ready
+      // CRITICAL FIX: Manually update manager.id BEFORE adding nodes
+      // Rainlink needs the bot user ID to connect properly - if it's undefined, the server will disconnect
       if (!rainlink.id || rainlink.id === 'undefined') {
         console.log(`[Rainlink] Manager ID is ${rainlink.id}, updating to correct value...`);
         try {
-          // Force update the manager ID
+          // Force update the manager ID BEFORE any node operations
           rainlink.id = bot.user.id;
           console.log(`[Rainlink] Manager ID updated to: ${rainlink.id}`);
         } catch (err) {
@@ -338,41 +418,22 @@ bot.once('ready', () => {
         console.log(`[Rainlink] Manager ID is correct: ${rainlink.id}`);
       }
   
-  // Wait longer for library connector to be fully ready before adding node
-  // This prevents "undefined" user ID from being sent to Lavalink
+  // CRITICAL: Wait a moment to ensure manager.id is set, then add node
+  // This prevents the "undefined user ID" disconnect issue
   setTimeout(() => {
-    // Verify library connector can access user ID
-    try {
-      const library = rainlink.library;
-      if (library && library.getId) {
-        const userId = library.getId();
-        console.log(`[Rainlink] Library connector user ID: ${userId}`);
-        
-        if (!userId || userId === 'undefined') {
-          console.warn(`[Rainlink] User ID not ready yet, waiting more...`);
-          // Wait longer and try again
-          setTimeout(() => {
-            const nodes = rainlink.nodes.all();
-            if (nodes.length === 0) {
-              addNodeSafely();
-            }
-          }, 2000);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn(`[Rainlink] Could not verify user ID:`, err.message);
+    // Double-check manager ID is set before adding node
+    if (!rainlink.id || rainlink.id === 'undefined') {
+      console.error(`[Rainlink] ERROR: Manager ID still undefined! Setting it now...`);
+      rainlink.id = bot.user.id;
     }
     
     const nodes = rainlink.nodes.all();
-    if (nodes.length === 0) {
-      addNodeSafely();
-    } else {
-      console.log(`[Rainlink] Nodes already exist (${nodes.length})`);
-    }
+    console.log(`[Rainlink] Checking nodes after initialization: ${nodes.length} node(s) found`);
     
-    function addNodeSafely() {
-      console.log(`[Rainlink] Adding node manually...`);
+    if (nodes.length === 0) {
+      console.log(`[Rainlink] No nodes found in constructor - adding manually...`);
+      console.log(`[Rainlink] Manager ID before adding node: ${rainlink.id}`);
+      
       try {
         const addedNode = rainlink.nodes.add({
           name: LAVALINK_NAME,
@@ -382,81 +443,126 @@ bot.once('ready', () => {
           secure: LAVALINK_SECURE
         });
         console.log(`[Rainlink] Node added: ${addedNode.options.name}`);
-        
-        // Immediately disconnect if it auto-connected (to prevent undefined error)
-        // Then reconnect after a short delay when library is definitely ready
-        if (addedNode.state === 0 || addedNode.online) {
-          console.log(`[Rainlink] Node auto-connected, disconnecting to prevent undefined error...`);
-          try {
-            addedNode.disconnect();
-            console.log(`[Rainlink] Node disconnected, will reconnect after delay...`);
-          } catch (disconnectErr) {
-            console.warn(`[Rainlink] Could not disconnect node:`, disconnectErr.message);
-          }
-        }
-        
-        // Wait a bit more, then reconnect manually
-        setTimeout(() => {
-          // Double-check user ID is ready
-          try {
-            const userId = rainlink.library?.getId();
-            if (userId && userId !== 'undefined') {
-              console.log(`[Rainlink] User ID confirmed ready (${userId}), connecting node...`);
-              try {
-                addedNode.connect();
-              } catch (connectErr) {
-                console.error(`[Rainlink] Failed to manually connect:`, connectErr.message);
-              }
-            } else {
-              console.error(`[Rainlink] User ID still not ready, cannot connect safely`);
-            }
-          } catch (err) {
-            console.error(`[Rainlink] Error checking user ID before reconnect:`, err.message);
-          }
-        }, 1000);
+        console.log(`[Rainlink] Manager ID after adding node: ${rainlink.id}`);
       } catch (err) {
         console.error(`[Rainlink] Failed to add node:`, err);
       }
+    } else {
+      console.log(`[Rainlink] Nodes already configured: ${nodes.length}`);
+      const node = nodes.find(n => n.options?.name === LAVALINK_NAME) || nodes[0];
+      if (node) {
+        console.log(`[Rainlink] Node "${node.options?.name}" ready`);
+      }
     }
-  }, 2000); // Increased delay to 2 seconds
+  }, 1000); // Increased delay to ensure manager.id is set
 
       // Rainlink event handlers
+
+
+      // Track disconnection timestamps to prevent reconnect storms
+      // This is especially important on Railway where restarts can trigger rate-limiting
+      let lastDisconnectTime = 0;
+      let disconnectCount = 0;
+      let consecutiveDisconnects = 0;
+      const RECONNECT_COOLDOWN = 10000; // 10 seconds cooldown after multiple disconnects
+      const MAX_CONSECUTIVE_DISCONNECTS = 5; // After 5 consecutive disconnects, wait longer
+      
+      // Detect if running on Railway
+      const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
+      
+      // Reset consecutive disconnect counter on successful connection
       rainlink.on('nodeConnect', (node) => {
         const nodeName = node?.name || node?.options?.name || 'Unknown';
         console.log(`[Rainlink] ✅ Connected to Lavalink node: ${nodeName}`);
-      });
-
-      rainlink.on('nodeDisconnect', (node, reason) => {
-        const nodeName = node?.name || node?.options?.name || 'Unknown';
-        console.warn(`[Rainlink] ⚠️ Disconnected from Lavalink node: ${nodeName} - Reason: ${reason}`);
+        console.log(`[Rainlink] Manager ID at connection: ${rainlink.id}`);
         
-        // If disconnect is due to error 1011 (undefined user ID issue), prevent immediate reconnect
-        if (reason === 1011 || reason === '1011') {
-          console.warn(`[Rainlink] Connection failed due to error 1011 (likely undefined user ID)`);
-          console.log(`[Rainlink] Verifying library connector user ID...`);
-          
-          try {
-            const library = rainlink.library;
-            if (library && library.getId) {
-              const userId = library.getId();
-              console.log(`[Rainlink] Library connector user ID check: ${userId}`);
-              
-              if (!userId || userId === 'undefined') {
-                console.error(`[Rainlink] User ID is still undefined! This is the problem.`);
-                console.log(`[Rainlink] Waiting 5 seconds before allowing reconnect...`);
-                setTimeout(() => {
-                  console.log(`[Rainlink] Reconnection delay complete, node should reconnect automatically`);
-                }, 5000);
-              }
-            }
-          } catch (err) {
-            console.error(`[Rainlink] Error checking user ID:`, err.message);
-          }
+        // Reset consecutive disconnect counter on successful connection
+        if (consecutiveDisconnects > 0) {
+          console.log(`[Rainlink] Connection successful - resetting disconnect counter`);
+          consecutiveDisconnects = 0;
+        }
+        
+        // Verify manager ID is still correct after connection
+        if (!rainlink.id || rainlink.id === 'undefined') {
+          console.error(`[Rainlink] CRITICAL: Manager ID is undefined after connection!`);
+          console.error(`[Rainlink] This will cause immediate disconnection. Fixing...`);
+          rainlink.id = bot.user.id;
         }
       });
-
-      rainlink.on('nodeError', (node, error) => {
-        console.error(`[Rainlink] Node ${node.name} error:`, error);
+      
+      rainlink.on('nodeDisconnect', (node, reason) => {
+        const nodeName = node?.name || node?.options?.name || 'Unknown';
+        const now = Date.now();
+        disconnectCount++;
+        consecutiveDisconnects++;
+        lastDisconnectTime = now;
+        
+        console.warn(`[Rainlink] ⚠️ Disconnected from Lavalink node: ${nodeName} - Reason: ${reason}`);
+        console.warn(`[Rainlink] Manager ID at disconnect: ${rainlink.id}`);
+        
+        // If running on Railway and getting rapid disconnects, likely rate-limiting from server
+        if (isRailway && consecutiveDisconnects >= 3) {
+          console.warn(`[Rainlink] Railway deployment detected - rapid disconnects may be due to:`);
+          console.warn(`[Rainlink] 1. Railway restarts triggering reconnection attempts`);
+          console.warn(`[Rainlink] 2. Public Lavalink server rate-limiting Railway's IP`);
+          console.warn(`[Rainlink] 3. Network instability between Railway and Lavalink server`);
+        }
+        
+        // Code 1000 is normal closure - but if it happens repeatedly, the server is rejecting connections
+        if (reason === 1000) {
+          console.log(`[Rainlink] Normal closure (1000) - checking if manager ID is valid...`);
+          if (!rainlink.id || rainlink.id === 'undefined') {
+            console.error(`[Rainlink] PROBLEM FOUND: Manager ID is undefined! This is why it disconnected.`);
+            console.error(`[Rainlink] Setting manager ID to: ${bot.user.id}`);
+            rainlink.id = bot.user.id;
+            console.log(`[Rainlink] Manager ID fixed. Node should reconnect automatically now.`);
+          } else {
+            console.log(`[Rainlink] Manager ID is valid (${rainlink.id})`);
+            
+            // If we're getting rapid disconnects, the server is likely rejecting connections
+            if (consecutiveDisconnects >= 3) {
+              console.error(`[Rainlink] ERROR: ${consecutiveDisconnects} consecutive disconnects detected!`);
+              console.error(`[Rainlink] The Lavalink server (${LAVALINK_NAME}) is actively rejecting connections.`);
+              
+              if (isRailway) {
+                console.error(`[Rainlink] Railway deployment detected - this is likely due to:`);
+                console.error(`[Rainlink] - Railway restarts causing reconnection attempts`);
+                console.error(`[Rainlink] - Public server rate-limiting Railway's IP address`);
+                console.error(`[Rainlink] - Network issues between Railway and the Lavalink server`);
+              }
+              
+              console.error(`[Rainlink] This is a SERVER-SIDE issue, not a bot configuration problem.`);
+              console.error(`[Rainlink] SOLUTIONS:`);
+              console.error(`[Rainlink] 1. Switch to a different public Lavalink server`);
+              console.error(`[Rainlink] 2. Self-host Lavalink on Railway (recommended for stability)`);
+              console.error(`[Rainlink] 3. Use Railway's free tier limits - may need paid plan for 24/7 uptime`);
+              console.error(`[Rainlink] 4. The bot will continue attempting to reconnect...`);
+              
+              // After 5 consecutive disconnects, log critical warning
+              if (consecutiveDisconnects >= MAX_CONSECUTIVE_DISCONNECTS) {
+                console.error(`[Rainlink] CRITICAL: ${consecutiveDisconnects} consecutive disconnects!`);
+                console.error(`[Rainlink] The server is likely rate-limiting. Consider self-hosting Lavalink.`);
+              }
+            }
+            
+            // Reset disconnect count after 2 minutes of stability
+            setTimeout(() => {
+              if (Date.now() - lastDisconnectTime > 120000) {
+                disconnectCount = 0;
+                console.log(`[Rainlink] Disconnect counter reset - connection seems stable now`);
+              }
+            }, 120000);
+          }
+        }
+        
+        // Error 1011 usually means undefined user ID
+        if (reason === 1011 || reason === '1011') {
+          console.warn(`[Rainlink] Connection error 1011 (undefined user ID)`);
+          if (!rainlink.id || rainlink.id === 'undefined') {
+            console.error(`[Rainlink] Manager ID is undefined - fixing...`);
+            rainlink.id = bot.user.id;
+          }
+        }
       });
 
       // Track last sent "Now playing" message to prevent duplicates
@@ -677,33 +783,14 @@ bot.on('messageCreate', async (message) => {
         return void message.reply('❌ Rainlink is not initialized yet. Please wait a moment.');
       }
       
-      // CRITICAL: Ensure Lavalink node is connected before creating player
-      const node = rainlink.nodes.get(LAVALINK_NAME) || rainlink.nodes.all()[0];
-      if (!node) {
-        return void message.reply('❌ No Lavalink node available. Please wait a moment for connection.');
+      // CRITICAL: Ensure Lavalink node is connected and session is ready
+      try {
+        await ensureNodeReady(rainlink, LAVALINK_NAME, 10000);
+        console.log('[Rainlink] Node is ready. Creating/getting player first, then searching...');
+      } catch (error) {
+        console.error('[Rainlink] Node not ready for play:', error.message);
+        return void message.reply('❌ Lavalink node is not ready. Please wait a moment and try again.');
       }
-      
-      if (node.state !== 0) { // 0 = Connected
-        console.log(`[Rainlink] Node state: ${node.state}, waiting for connection...`);
-        await new Promise((resolve) => {
-          const timeout = setTimeout(() => resolve(), 10000);
-          const checkInterval = setInterval(() => {
-            if (node.state === 0) {
-              clearTimeout(timeout);
-              clearInterval(checkInterval);
-              resolve();
-            }
-          }, 500);
-          
-          rainlink.once('nodeConnect', () => {
-            clearTimeout(timeout);
-            clearInterval(checkInterval);
-            resolve();
-          });
-        });
-      }
-      
-      console.log('[Rainlink] Node is connected. Creating/getting player first, then searching...');
       
       // Format query for search: handle plain text queries intelligently
       let searchQuery = query;
@@ -873,6 +960,21 @@ bot.on('messageCreate', async (message) => {
       
       while (searchAttempts < maxSearchAttempts && (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0)) {
         try {
+          // Before each search attempt, ensure node is still ready (might have disconnected)
+          try {
+            await ensureNodeReady(rainlink, LAVALINK_NAME, 5000);
+          } catch (nodeError) {
+            console.warn(`[Rainlink] Node not ready before search attempt ${searchAttempts + 1}, waiting...`);
+            // Wait a bit longer and try to reconnect
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            try {
+              await ensureNodeReady(rainlink, LAVALINK_NAME, 5000);
+            } catch (retryError) {
+              console.error(`[Rainlink] Node still not ready after retry: ${retryError.message}`);
+              throw new Error('Lavalink node is not available. Please try again in a moment.');
+            }
+          }
+          
           if (!searchResult) {
             // Try different search sources if previous one failed
             const currentSourceIndex = Math.min(searchAttempts, searchSources.length - 1);
@@ -928,22 +1030,42 @@ bot.on('messageCreate', async (message) => {
           const errorMsg = searchError.message || '';
           console.error(`[Rainlink] Player search error (attempt ${searchAttempts}):`, errorMsg);
           
-          if (errorMsg.includes('session id') || errorMsg.includes('session') || errorMsg.includes('not established')) {
+          // Check if node disconnected during search (common with Spotify URLs that take time to resolve)
+          const node = rainlink.nodes.get(LAVALINK_NAME) || rainlink.nodes.all()[0];
+          const nodeDisconnected = !node || node.state !== 0 || !node.online;
+          
+          if (errorMsg.includes('session id') || errorMsg.includes('session') || errorMsg.includes('not established') || nodeDisconnected) {
             if (searchAttempts < maxSearchAttempts) {
-              // First retry is very quick, subsequent ones slightly longer
-              const waitTime = searchAttempts === 0 ? 300 : 500 * searchAttempts; // Much faster first retry
-              console.log(`[Rainlink] Session issue detected, waiting ${waitTime}ms before retry...`);
+              // Wait longer for node to reconnect if it disconnected (especially for Spotify URLs)
+              const waitTime = nodeDisconnected ? 2000 : (searchAttempts === 0 ? 300 : 500 * searchAttempts);
+              console.log(`[Rainlink] ${nodeDisconnected ? 'Node disconnected' : 'Session issue'} detected, waiting ${waitTime}ms before retry...`);
               await new Promise(resolve => setTimeout(resolve, waitTime));
               
-              // Quick connection check
+              // Ensure node is ready again before retrying
+              try {
+                await ensureNodeReady(rainlink, LAVALINK_NAME, 8000);
+                console.log(`[Rainlink] Node ready for retry attempt ${searchAttempts + 1}`);
+              } catch (nodeReadyError) {
+                console.error(`[Rainlink] Node not ready after wait: ${nodeReadyError.message}`);
+                if (searchAttempts >= maxSearchAttempts - 1) {
+                  throw new Error('Lavalink node disconnected during search. Please try again in a moment.');
+                }
+                // Continue to next attempt
+                continue;
+              }
+              
+              // Quick player connection check
               if (player.state !== 0) {
-                console.log('[Rainlink] Connection still not ready, quick wait...');
+                console.log('[Rainlink] Player connection still not ready, quick wait...');
                 let stateCheck = 0;
                 while (player.state !== 0 && stateCheck < 5) {
                   await new Promise(resolve => setTimeout(resolve, 100));
                   stateCheck++;
                 }
               }
+              
+              // Reset searchResult to force a new search attempt
+              searchResult = null;
               continue;
             }
           }
@@ -1217,18 +1339,12 @@ bot.on('messageCreate', async (message) => {
         return void message.channel.send(buildEmbed('Join', `Already connected to <#${voiceChannel.id}>`, 'join'));
       }
       
-      // CRITICAL: Ensure Lavalink node is connected (cache node to avoid repeated lookups)
-      let node = rainlink.nodes.get(LAVALINK_NAME);
-      if (!node) {
-        const allNodes = rainlink.nodes.all();
-        node = allNodes[0];
-      }
-      if (!node) {
-        return void message.reply('❌ No Lavalink node available. Please wait a moment for connection.');
-      }
-      
-      if (node.state !== 0) {
-        return void message.reply('❌ Lavalink node is not connected. Please wait a moment and try again.');
+      // CRITICAL: Ensure Lavalink node is connected and session is ready
+      try {
+        await ensureNodeReady(rainlink, LAVALINK_NAME, 10000);
+      } catch (error) {
+        console.error('[Rainlink] Node not ready for join:', error.message);
+        return void message.reply('❌ Lavalink node is not ready. Please wait a moment and try again.');
       }
       
       // Create or get player
@@ -1683,3 +1799,4 @@ bot.on('messageCreate', async (message) => {
 });
 
 bot.login(TOKEN);
+
