@@ -841,10 +841,21 @@ bot.on('messageCreate', async (message) => {
   }
 
   if (command === 'play' || command === 'p') {
-    const query = args.join(' ');
+    // Get query from original message content to avoid corruption
+    const fullContent = message.content.trim();
+    const commandMatch = fullContent.match(new RegExp(`^${PREFIX}(?:play|p)\\s+(.+)$`, 'i'));
+    const query = commandMatch ? commandMatch[1].trim() : args.join(' ').trim();
+    
     if (!query) return void message.reply('Provide a YouTube/Spotify link or search text.');
     
+    // Validate query doesn't contain log output (sanity check)
+    if (query.includes('[Rainlink]') || query.includes('[Command]') || query.length > 500) {
+      console.error(`[Rainlink] Invalid query detected (contains log output or too long): "${query.substring(0, 100)}..."`);
+      return void message.reply('Invalid query detected. Please try again with a clean URL or search term.');
+    }
+    
     console.log(`[Rainlink] Play command - query: "${query}"`);
+    console.log(`[Rainlink] Query length: ${query.length}, is URL: ${query.includes('http')}`);
     
     const voiceChannel = message.member?.voice?.channel;
     if (!voiceChannel) return void message.reply('Join a voice channel first.');
