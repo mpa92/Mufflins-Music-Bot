@@ -1095,23 +1095,36 @@ bot.on('messageCreate', async (message) => {
             });
             
             try {
+              console.log(`[Rainlink] Starting search promise race...`);
               searchResult = await Promise.race([searchPromise, timeoutPromise]);
-              console.log(`[Rainlink] Search completed successfully`);
-              console.log(`[Rainlink] Search result type: ${typeof searchResult}`);
-              console.log(`[Rainlink] Search result is null/undefined: ${searchResult === null || searchResult === undefined}`);
+              console.log(`[Rainlink] Search completed successfully - promise resolved`);
               
-              if (searchResult) {
-                console.log(`[Rainlink] Search result has tracks property: ${!!searchResult.tracks}`);
-                console.log(`[Rainlink] Search result tracks type: ${Array.isArray(searchResult.tracks) ? 'array' : typeof searchResult.tracks}`);
-                console.log(`[Rainlink] Search result tracks length: ${searchResult.tracks?.length || 0}`);
-                console.log(`[Rainlink] Search result type field: ${searchResult.type || 'N/A'}`);
-                if (searchResult.tracks && searchResult.tracks.length > 0) {
-                  console.log(`[Rainlink] First track title: ${searchResult.tracks[0]?.title || 'N/A'}`);
+              try {
+                console.log(`[Rainlink] Search result type: ${typeof searchResult}`);
+                console.log(`[Rainlink] Search result is null/undefined: ${searchResult === null || searchResult === undefined}`);
+                console.log(`[Rainlink] Search result value: ${searchResult ? 'EXISTS' : 'NULL/UNDEFINED'}`);
+                
+                if (searchResult) {
+                  console.log(`[Rainlink] Search result has tracks property: ${!!searchResult.tracks}`);
+                  console.log(`[Rainlink] Search result tracks type: ${Array.isArray(searchResult.tracks) ? 'array' : typeof searchResult.tracks}`);
+                  console.log(`[Rainlink] Search result tracks length: ${searchResult.tracks?.length || 0}`);
+                  console.log(`[Rainlink] Search result type field: ${searchResult.type || 'N/A'}`);
+                  if (searchResult.tracks && searchResult.tracks.length > 0) {
+                    console.log(`[Rainlink] First track title: ${searchResult.tracks[0]?.title || 'N/A'}`);
+                  } else {
+                    console.warn(`[Rainlink] No tracks in result. Full result keys: ${Object.keys(searchResult || {}).join(', ')}`);
+                    // Try to stringify the result for debugging
+                    try {
+                      console.warn(`[Rainlink] Full result (stringified): ${JSON.stringify(searchResult).substring(0, 500)}`);
+                    } catch (e) {
+                      console.warn(`[Rainlink] Could not stringify result: ${e.message}`);
+                    }
+                  }
                 } else {
-                  console.warn(`[Rainlink] No tracks in result. Full result keys: ${Object.keys(searchResult).join(', ')}`);
+                  console.error(`[Rainlink] Search result is null or undefined!`);
                 }
-              } else {
-                console.error(`[Rainlink] Search result is null or undefined!`);
+              } catch (logError) {
+                console.error(`[Rainlink] Error logging search result:`, logError);
               }
             } catch (timeoutError) {
               console.error(`[Rainlink] Search timed out or failed:`, timeoutError.message);
