@@ -53,6 +53,9 @@ const TOKEN = process.env.TOKEN || '';
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 
+// Track if Spotify authorization was successful
+let spotifyAuthorized = false;
+
 // Lavalink configuration (REQUIRED for Rainlink)
 console.log(`[Config] Reading process.env.LAVALINK_URL: "${process.env.LAVALINK_URL || 'NOT SET'}"`);
 const LAVALINK_URL = process.env.LAVALINK_URL || 'localhost:2333';
@@ -362,6 +365,27 @@ async function resolveSpotifyUrl(spotifyUrl) {
   try {
     console.log(`[Spotify] Resolving Spotify URL: ${spotifyUrl}`);
     
+    // Verify authorization before attempting to resolve
+    if (!spotifyAuthorized) {
+      console.error(`[Spotify] Authorization not completed - cannot resolve Spotify URL`);
+      throw new Error('Spotify authorization not completed. Please check your SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables.');
+    }
+    
+    // Re-authorize if needed (play-dl might need fresh tokens)
+    if (SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET) {
+      try {
+        await play.authorization({
+          client_id: SPOTIFY_CLIENT_ID,
+          client_secret: SPOTIFY_CLIENT_SECRET,
+          refresh_token: process.env.SPOTIFY_REFRESH_TOKEN || '',
+          market: process.env.SPOTIFY_MARKET || 'US'
+        });
+        console.log(`[Spotify] Re-authorized successfully`);
+      } catch (authError) {
+        console.warn(`[Spotify] Re-authorization failed (might be OK if already authorized): ${authError.message}`);
+      }
+    }
+    
     // Check if it's a valid Spotify URL
     const spotifyRegex = /https?:\/\/(?:open|play)\.spotify\.com\/(track|album|playlist|artist)\/([a-zA-Z0-9]+)/;
     const match = spotifyUrl.match(spotifyRegex);
@@ -378,22 +402,32 @@ async function resolveSpotifyUrl(spotifyUrl) {
     let searchQuery = '';
     
     if (spotifyType === 'track') {
+      console.log(`[Spotify] Calling play.spotify() for track...`);
       const trackInfo = await play.spotify(spotifyUrl);
+      console.log(`[Spotify] play.spotify() returned:`, trackInfo ? `Object with keys: ${Object.keys(trackInfo).join(', ')}` : 'null/undefined');
+      
       if (trackInfo && trackInfo.name) {
         const artistName = trackInfo.artists && trackInfo.artists.length > 0 
           ? (typeof trackInfo.artists[0] === 'string' ? trackInfo.artists[0] : trackInfo.artists[0].name)
           : '';
         searchQuery = `${trackInfo.name} ${artistName}`.trim();
-        console.log(`[Spotify] Resolved track: "${trackInfo.name}" by ${artistName || 'Unknown'}`);
+        console.log(`[Spotify] ✅ Resolved track: "${trackInfo.name}" by ${artistName || 'Unknown'}`);
+      } else {
+        console.warn(`[Spotify] Track info missing name field:`, trackInfo);
       }
     } else if (spotifyType === 'album') {
+      console.log(`[Spotify] Calling play.spotify() for album...`);
       const albumInfo = await play.spotify(spotifyUrl);
+      console.log(`[Spotify] play.spotify() returned:`, albumInfo ? `Object with keys: ${Object.keys(albumInfo).join(', ')}` : 'null/undefined');
+      
       if (albumInfo && albumInfo.name) {
         const artistName = albumInfo.artists && albumInfo.artists.length > 0
           ? (typeof albumInfo.artists[0] === 'string' ? albumInfo.artists[0] : albumInfo.artists[0].name)
           : '';
         searchQuery = `${albumInfo.name} ${artistName}`.trim();
-        console.log(`[Spotify] Resolved album: "${albumInfo.name}"`);
+        console.log(`[Spotify] ✅ Resolved album: "${albumInfo.name}"`);
+      } else {
+        console.warn(`[Spotify] Album info missing name field:`, albumInfo);
       }
     } else {
       console.log(`[Spotify] Unsupported Spotify type: ${spotifyType} (playlists/artists not supported)`);
@@ -408,7 +442,8 @@ async function resolveSpotifyUrl(spotifyUrl) {
     console.log(`[Spotify] Generated YouTube search query: "${searchQuery}"`);
     return searchQuery;
   } catch (error) {
-    console.error(`[Spotify] Error resolving Spotify URL:`, error.message);
+    console.error(`[Spotify] ❌ Error resolving Spotify URL:`, error.message);
+    console.error(`[Spotify] Error details:`, error);
     return null;
   }
 }
@@ -422,20 +457,27 @@ bot.once('ready', async () => {
   if (SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET) {
     try {
       console.log('[Spotify] Initializing Spotify authorization for play-dl...');
-      await play.authorization({
+      console.log(`[Spotify] Using Client ID: ${SPOTIFY_CLIENT_ID.substring(0, 8)}...`);
+      const authResult = await play.authorization({
         client_id: SPOTIFY_CLIENT_ID,
         client_secret: SPOTIFY_CLIENT_SECRET,
         refresh_token: process.env.SPOTIFY_REFRESH_TOKEN || '',
         market: process.env.SPOTIFY_MARKET || 'US'
       });
-      console.log('[Spotify] Authorization successful - Spotify URL resolution enabled');
+      spotifyAuthorized = true;
+      console.log('[Spotify] ✅ Authorization successful - Spotify URL resolution enabled');
+      console.log(`[Spotify] Authorization result:`, authResult ? 'OK' : 'Unknown');
     } catch (error) {
-      console.warn(`[Spotify] Failed to authorize play-dl with Spotify: ${error.message}`);
-      console.warn('[Spotify] Spotify URL resolution will not work. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to enable it.');
+      spotifyAuthorized = false;
+      console.error(`[Spotify] ❌ Failed to authorize play-dl with Spotify: ${error.message}`);
+      console.error(`[Spotify] Error stack:`, error.stack);
+      console.warn('[Spotify] Spotify URL resolution will not work. Check your SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.');
     }
   } else {
-    console.warn('[Spotify] Spotify credentials not provided. Spotify URL resolution will not work.');
-    console.warn('[Spotify] To enable: Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables.');
+    spotifyAuthorized = false;
+    console.warn('[Spotify] ⚠️ Spotify credentials not provided. Spotify URL resolution will not work.');
+    console.warn('[Spotify] To enable: Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables in Railway.');
+    console.warn('[Spotify] Get credentials from: https://developer.spotify.com/dashboard');
   }
   
   // Load icon cache at startup (one-time operation, much faster than per-command file reads)
@@ -959,8 +1001,14 @@ bot.on('messageCreate', async (message) => {
       
       // Check if Spotify credentials are configured
       if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
-        await message.channel.send(`⚠️ **Spotify URL resolution not configured.**\n\nTo enable Spotify URL playback, you need to:\n1. Create a Spotify app at https://developer.spotify.com/dashboard\n2. Set \`SPOTIFY_CLIENT_ID\` and \`SPOTIFY_CLIENT_SECRET\` environment variables\n\n**Workaround:** Search for the song name manually instead of using the Spotify URL.`).catch(() => {});
+        await message.channel.send(`⚠️ **Spotify URL resolution not configured.**\n\nTo enable Spotify URL playback, you need to:\n1. Create a Spotify app at https://developer.spotify.com/dashboard\n2. Set \`SPOTIFY_CLIENT_ID\` and \`SPOTIFY_CLIENT_SECRET\` environment variables in Railway\n\n**Workaround:** Search for the song name manually instead of using the Spotify URL.`).catch(() => {});
         return; // Don't try to play Spotify URLs without credentials
+      }
+      
+      // Check if authorization was successful
+      if (!spotifyAuthorized) {
+        await message.channel.send(`⚠️ **Spotify authorization failed.**\n\nThe bot attempted to authorize with Spotify but encountered an error. Please check:\n1. Your \`SPOTIFY_CLIENT_ID\` and \`SPOTIFY_CLIENT_SECRET\` are correct\n2. Check the bot logs for authorization errors\n\n**Workaround:** Search for the song name manually instead of using the Spotify URL.`).catch(() => {});
+        return; // Don't try to play Spotify URLs without authorization
       }
       
       try {
