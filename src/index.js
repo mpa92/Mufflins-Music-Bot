@@ -415,9 +415,25 @@ bot.once('ready', () => {
     
     console.log(`[Rainlink] Library connector verified - ID: ${testUserId}`);
     
-    initializeRainlink();
+    initializeRainlink(libraryConnector);
     
-    function initializeRainlink() {
+    function initializeRainlink(libraryConnector) {
+      // CRITICAL: Re-verify bot.user.id is still available right before creating Rainlink
+      if (!bot.user || !bot.user.id) {
+        console.error('[Rainlink] CRITICAL: bot.user.id disappeared! Cannot initialize Rainlink.');
+        return;
+      }
+      
+      // Test the library connector one more time right before use
+      const finalUserIdTest = libraryConnector.getId();
+      if (!finalUserIdTest || finalUserIdTest.toString() !== bot.user.id.toString()) {
+        console.error('[Rainlink] CRITICAL: Library connector broken right before initialization!');
+        console.error(`[Rainlink] Expected: ${bot.user.id}, Got: ${finalUserIdTest}`);
+        return;
+      }
+      
+      console.log(`[Rainlink] Final verification - Library connector ID: ${finalUserIdTest}, Bot user ID: ${bot.user.id}`);
+      
       // CRITICAL: Initialize Rainlink WITHOUT nodes first, then add nodes after ID is set
       // This prevents nodes from connecting before the user ID is properly configured
       rainlink = new Rainlink({
