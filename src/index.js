@@ -391,17 +391,11 @@ bot.once('ready', () => {
     initializeRainlink();
     
     function initializeRainlink() {
+      // CRITICAL: Initialize Rainlink WITHOUT nodes first, then add nodes after ID is set
+      // This prevents nodes from connecting before the user ID is properly configured
       rainlink = new Rainlink({
         library: libraryConnector,
-        nodes: [
-          {
-            name: LAVALINK_NAME,
-            host: lavalinkHost,
-            port: parseInt(lavalinkPort),
-            auth: LAVALINK_PASSWORD, // Note: Rainlink uses 'auth' not 'password'
-            secure: LAVALINK_SECURE
-          }
-        ],
+        nodes: [], // Start with NO nodes - we'll add them after ID is confirmed
         options: {
           defaultSearchEngine: 'youtube',
           defaultVolume: 50
@@ -409,68 +403,65 @@ bot.once('ready', () => {
       });
 
       console.log(`[Rainlink] Rainlink initialized. Bot user ID: ${bot.user?.id || 'NOT AVAILABLE'}`);
-      console.log(`[Rainlink] Nodes found: ${rainlink.nodes.all().length}`);
       
-      // CRITICAL FIX: Manually update manager.id BEFORE adding nodes
-      // Rainlink needs the bot user ID to connect properly - if it's undefined, the server will disconnect
-      if (!rainlink.id || rainlink.id === 'undefined') {
-        console.log(`[Rainlink] Manager ID is ${rainlink.id}, updating to correct value...`);
-        try {
-          // Force update the manager ID BEFORE any node operations
+      // CRITICAL FIX: Set manager.id IMMEDIATELY after creation
+      // This must happen before ANY node operations
+      console.log(`[Rainlink] Setting manager ID BEFORE adding nodes...`);
+      try {
+        rainlink.id = bot.user.id;
+        console.log(`[Rainlink] Manager ID set to: ${rainlink.id}`);
+        
+        // Verify the ID is actually set
+        if (!rainlink.id || rainlink.id === 'undefined' || rainlink.id.toString() !== bot.user.id.toString()) {
+          console.error(`[Rainlink] CRITICAL: Manager ID not properly set! Expected: ${bot.user.id}, Got: ${rainlink.id}`);
+          // Force set it again
           rainlink.id = bot.user.id;
-          console.log(`[Rainlink] Manager ID updated to: ${rainlink.id}`);
-        } catch (err) {
-          console.error(`[Rainlink] Failed to update manager ID:`, err);
+          console.log(`[Rainlink] Manager ID force-set to: ${rainlink.id}`);
+        } else {
+          console.log(`[Rainlink] Manager ID verified: ${rainlink.id}`);
         }
-      } else {
-        console.log(`[Rainlink] Manager ID is correct: ${rainlink.id}`);
+      } catch (err) {
+        console.error(`[Rainlink] Failed to set manager ID:`, err);
+        rainlink.id = bot.user.id; // Force set anyway
       }
   
-  // CRITICAL: Wait a moment to ensure manager.id is set, then add node
-  // This prevents the "undefined user ID" disconnect issue
-  setTimeout(() => {
-    // Double-check manager ID is set before adding node
-    if (!rainlink.id || rainlink.id === 'undefined') {
-      console.error(`[Rainlink] ERROR: Manager ID still undefined! Setting it now...`);
-      rainlink.id = bot.user.id;
-    }
-    
-    const nodes = rainlink.nodes.all();
-    console.log(`[Rainlink] Checking nodes after initialization: ${nodes.length} node(s) found`);
-    
-    if (nodes.length === 0) {
-      console.log(`[Rainlink] No nodes found in constructor - adding manually...`);
-      console.log(`[Rainlink] Manager ID before adding node: ${rainlink.id}`);
-      
-      try {
-        console.log(`[Rainlink] Attempting to add node with config:`);
-        console.log(`[Rainlink]   Name: ${LAVALINK_NAME}`);
-        console.log(`[Rainlink]   Host: ${lavalinkHost}`);
-        console.log(`[Rainlink]   Port: ${parseInt(lavalinkPort)}`);
-        console.log(`[Rainlink]   Secure: ${LAVALINK_SECURE}`);
-        console.log(`[Rainlink]   Auth: ${LAVALINK_PASSWORD ? 'SET' : 'NOT SET'}`);
+      // NOW add the node AFTER ID is confirmed
+      // Wait a brief moment to ensure ID is fully propagated
+      setTimeout(() => {
+        console.log(`[Rainlink] Manager ID before node addition: ${rainlink.id}`);
+        console.log(`[Rainlink] Bot user ID: ${bot.user.id}`);
+        console.log(`[Rainlink] IDs match: ${rainlink.id === bot.user.id}`);
         
-        const addedNode = rainlink.nodes.add({
-          name: LAVALINK_NAME,
-          host: lavalinkHost,
-          port: parseInt(lavalinkPort),
-          auth: LAVALINK_PASSWORD,
-          secure: LAVALINK_SECURE
-        });
-        console.log(`[Rainlink] Node added: ${addedNode.options.name}`);
-        console.log(`[Rainlink] Manager ID after adding node: ${rainlink.id}`);
-      } catch (err) {
-        console.error(`[Rainlink] Failed to add node:`, err);
-        console.error(`[Rainlink] Error details:`, err.message);
-      }
-    } else {
-      console.log(`[Rainlink] Nodes already configured: ${nodes.length}`);
-      const node = nodes.find(n => n.options?.name === LAVALINK_NAME) || nodes[0];
-      if (node) {
-        console.log(`[Rainlink] Node "${node.options?.name}" ready`);
-      }
-    }
-  }, 1000); // Increased delay to ensure manager.id is set
+        // Double-check ID one more time
+        if (!rainlink.id || rainlink.id.toString() !== bot.user.id.toString()) {
+          console.error(`[Rainlink] ERROR: Manager ID mismatch! Setting again...`);
+          rainlink.id = bot.user.id;
+        }
+        
+        try {
+          console.log(`[Rainlink] Attempting to add node with config:`);
+          console.log(`[Rainlink]   Name: ${LAVALINK_NAME}`);
+          console.log(`[Rainlink]   Host: ${lavalinkHost}`);
+          console.log(`[Rainlink]   Port: ${parseInt(lavalinkPort)}`);
+          console.log(`[Rainlink]   Secure: ${LAVALINK_SECURE}`);
+          console.log(`[Rainlink]   Auth: ${LAVALINK_PASSWORD ? 'SET' : 'NOT SET'}`);
+          console.log(`[Rainlink]   Manager ID: ${rainlink.id}`);
+          
+          const addedNode = rainlink.nodes.add({
+            name: LAVALINK_NAME,
+            host: lavalinkHost,
+            port: parseInt(lavalinkPort),
+            auth: LAVALINK_PASSWORD,
+            secure: LAVALINK_SECURE
+          });
+          console.log(`[Rainlink] Node added: ${addedNode.options.name}`);
+          console.log(`[Rainlink] Manager ID after adding node: ${rainlink.id}`);
+          console.log(`[Rainlink] Node should connect now with user ID: ${rainlink.id}`);
+        } catch (err) {
+          console.error(`[Rainlink] Failed to add node:`, err);
+          console.error(`[Rainlink] Error details:`, err.message);
+        }
+      }, 500); // Brief delay to ensure ID is set
 
       // Rainlink event handlers
 
