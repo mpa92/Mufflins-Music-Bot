@@ -44,8 +44,6 @@ if (result.error && envFileExists) {
 
 const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 const { Rainlink, Library } = require('rainlink');
-const fs = require('fs');
-const path = require('path');
 
 // Monkey-patch readline to auto-answer play-dl prompts BEFORE requiring play-dl
 // play-dl prompts "Do you want to save data in a file? (Yes / No):" and we need to auto-answer "Yes"
