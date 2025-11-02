@@ -498,8 +498,9 @@ bot.once('ready', () => {
 
       // Handle track exception events (playback failures after track starts)
       rainlink.on('trackException', (player, track, exception) => {
+        console.log(`[${player.guildId}] ===== TRACK EXCEPTION HANDLER TRIGGERED =====`);
         console.error(`[${player.guildId}] Track exception: ${track?.title || 'Unknown'}`);
-        console.error(`[${player.guildId}] Exception details:`, exception);
+        console.error(`[${player.guildId}] Exception details:`, JSON.stringify(exception, null, 2).substring(0, 300));
         console.log(`[${player.guildId}] Track source: ${track?.sourceName}, identifier: ${track?.identifier}`);
         console.log(`[${player.guildId}] Track info:`, JSON.stringify(track?.info || {}, null, 2).substring(0, 200));
         
