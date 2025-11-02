@@ -120,7 +120,31 @@ async function resolveSpotifyToYouTube(spotifyUrl) {
     }
     const data = await res.json();
     console.log(`[Spotify] oEmbed response:`, JSON.stringify(data, null, 2));
-    // data.title is like "ARTIST - TRACK" or "TRACK"
+    
+    // oEmbed only gives us the title, not the artist
+    // Extract track ID to get full info from Spotify Web API (no auth needed for public tracks)
+    const trackId = spotifyUrl.match(/track\/([A-Za-z0-9]+)/)?.[1];
+    if (trackId) {
+      try {
+        // Use Spotify's public API to get artist info
+        const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (trackRes.ok) {
+          const trackData = await trackRes.json();
+          const artist = trackData.artists?.[0]?.name || '';
+          const title = trackData.name || data.title || '';
+          const fullTitle = artist ? `${artist} ${title}` : title;
+          console.log(`[Spotify] Full title with artist: "${fullTitle}"`);
+          return fullTitle;
+        }
+      } catch (apiError) {
+        console.log(`[Spotify] Couldn't get artist from API, using oEmbed title only`);
+      }
+    }
+    
+    // Fallback to oEmbed title
     const title = (data?.title || '').replace(/\s*\(.*?\)\s*$/,'').trim();
     if (title) {
       console.log(`[Spotify] Resolved "${spotifyUrl}" → "${title}"`);
