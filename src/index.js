@@ -88,6 +88,16 @@ const prefixCommandFolders = fs.readdirSync("./src/prefix");
         setBotClient(client);
     });
     
+    // Check if token exists before attempting login
+    if (!process.env.TOKEN) {
+        console.error('❌ Bot token not found in environment variables!');
+        console.error('📝 Please set the TOKEN variable in Railway:');
+        console.error('   1. Go to your service → Variables tab');
+        console.error('   2. Add: TOKEN=your_discord_bot_token');
+        console.error('   3. Redeploy the service');
+        process.exit(1);
+    }
+    
     await client.login(process.env.TOKEN);
 })();
 
