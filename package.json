@@ -1,25 +1,47 @@
 {
   "name": "mufflins-discord-bot",
-  "version": "1.0.0",
-  "description": "",
+  "version": "2.0.0",
+  "description": "Mufflins Discord Music Bot - Powerful music bot with slash commands",
   "main": "src/index.js",
   "engines": {
     "node": "20.x"
   },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "server": "node server.js",
+    "build:css": "tailwindcss -i ./src/dashboard/CSS/styles.css -o ./src/dashboard/CSS/output.css --watch"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["discord", "music", "bot", "mufflins"],
+  "author": "Mufflins",
   "license": "ISC",
   "dependencies": {
+    "@discordjs/rest": "^2.0.0",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
     "discord.js": "^14.24.2",
+    "discord-api-types": "^0.37.0",
     "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "jimp": "^1.6.0",
     "kazagumo": "^3.2.1",
-    "shoukaku": "^4.0.1"
+    "kazagumo-filter": "^2.0.0",
+    "llyrics": "^1.1.7",
+    "lyrics-finder": "^21.7.0",
+    "mongodb": "^6.9.0",
+    "mongoose": "^8.6.3",
+    "musicard": "^2.0.5",
+    "node-fetch": "^3.3.2",
+    "passport": "^0.7.0",
+    "passport-discord": "^0.1.4",
+    "shoukaku": "^4.0.1",
+    "songlyrics": "^2.4.8"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "autoprefixer": "^10.4.20",
+    "nodemon": "^3.1.10",
+    "postcss": "^8.5.2",
+    "tailwindcss": "^4.0.6"
   }
 }

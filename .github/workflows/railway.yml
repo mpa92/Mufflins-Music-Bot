@@ -1,0 +1,20 @@
+# This file is for reference only
+# Railway automatically deploys when you push to main branch
+# No GitHub Actions needed - Railway handles everything!
+
+name: Railway Deployment (Auto)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment Note
+        run: |
+          echo "✅ Railway will automatically deploy this push!"
+          echo "📊 Check your Railway dashboard for deployment status"
+          echo "🔗 https://railway.app/dashboard"
+
