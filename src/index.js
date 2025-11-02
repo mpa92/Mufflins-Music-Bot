@@ -723,6 +723,7 @@ bot.on('messageCreate', async (message) => {
       
       // Use query as-is (Rainlink will add ytsearch: prefix via defaultSearchEngine if needed)
       let searchQuery = query;
+      const isUrl = query.startsWith('http://') || query.startsWith('https://');
       
       if (!player) {
         player = await rainlink.create({
