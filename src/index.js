@@ -471,13 +471,20 @@ bot.once('ready', () => {
         
         const channel = bot.channels.cache.get(player.textId);
         if (channel) {
-          // Check if it's the YouTube cipher error
+          // Check for specific error types
           const errorMsg = exception?.message || exception?.cause || 'Unknown error';
           const isYouTubeCipherError = errorMsg.includes('ScriptExtractionException') || 
                                       errorMsg.includes('sig function') ||
                                       errorMsg.includes('signature cipher');
+          const isSignInError = errorMsg.includes('Please sign in') || 
+                               errorMsg.includes('requires login') ||
+                               errorMsg.includes('This video requires login');
           
-          if (isYouTubeCipherError) {
+          if (isSignInError) {
+            // Try searching by song name - may use different code path that doesn't require OAuth
+            const trackTitle = track?.title || 'this track';
+            channel.send(`❌ **"Please sign in" error**\n\nThe video requires authentication (age-restricted or region-locked).\n\n**Workaround:** Try searching by song name instead:\n\`mm!play ${trackTitle}\`\n\nThis may find a different upload that doesn't require login.`).catch(() => {});
+          } else if (isYouTubeCipherError) {
             channel.send('❌ **YouTube cipher extraction failed**\n\nThis is a known issue with YouTube\'s changing script format. The track cannot be played right now.\n\n**Workaround:** Try searching by song name instead: `mm!play song name`').catch(() => {});
           } else {
             channel.send(`❌ **Playback failed**: ${errorMsg}`).catch(() => {});
