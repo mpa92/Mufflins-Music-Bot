@@ -105,6 +105,32 @@ const AUTO_DISCONNECT_DELAY = 300000; // 5 minutes (300000ms)
 // Icon path cache (commandName -> iconPath) - loaded once at startup
 const iconCache = new Map();
 
+// Spotify URL regex
+const SPOTIFY_TRACK_RE = /^https?:\/\/open\.spotify\.com\/track\/([A-Za-z0-9]+)(\?.*)?$/;
+const SPOTIFY_PLAYLIST_RE = /^https?:\/\/open\.spotify\.com\/playlist\/([A-Za-z0-9]+)(\?.*)?$/;
+const SPOTIFY_ALBUM_RE = /^https?:\/\/open\.spotify\.com\/album\/([A-Za-z0-9]+)(\?.*)?$/;
+
+// Convert Spotify URLs to YouTube searches using oEmbed (no auth needed)
+async function resolveSpotifyToYouTube(spotifyUrl) {
+  try {
+    const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`);
+    if (!res.ok) {
+      console.error(`[Spotify] oEmbed failed: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    // data.title is like "ARTIST - TRACK" or "TRACK"
+    const title = (data?.title || '').replace(/\s*\(.*?\)\s*$/,'').trim();
+    if (title) {
+      console.log(`[Spotify] Resolved "${spotifyUrl}" → "${title}"`);
+      return title;
+    }
+  } catch (e) {
+    console.error(`[Spotify] oEmbed error:`, e.message);
+  }
+  return null;
+}
+
 // Helper function to setup auto-disconnect
 function setupAutoDisconnect(guildId, voiceChannelId) {
   // Clear existing timer if any
@@ -621,8 +647,21 @@ bot.on('messageCreate', async (message) => {
   }
 
   if (command === 'play' || command === 'p') {
-    const query = args.join(' ');
+    let query = args.join(' ');
     if (!query) return void message.reply('Provide a YouTube/Spotify link or search text.');
+    
+    // Convert Spotify URLs to YouTube searches (client-side, no server plugins needed)
+    if (SPOTIFY_TRACK_RE.test(query) || SPOTIFY_ALBUM_RE.test(query)) {
+      const spotifyTitle = await resolveSpotifyToYouTube(query);
+      if (spotifyTitle) {
+        query = `ytmsearch:${spotifyTitle}`;
+        console.log(`[Spotify] Converted to YouTube Music search: "${query}"`);
+      } else {
+        return void message.reply('❌ Failed to resolve Spotify URL. Try searching by song name instead.');
+      }
+    } else if (SPOTIFY_PLAYLIST_RE.test(query)) {
+      return void message.reply('❌ Spotify playlists aren\'t supported yet. Try adding individual tracks.');
+    }
     
     console.log(`[Rainlink] Play command - query: "${query}"`);
     
