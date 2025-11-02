@@ -730,6 +730,15 @@ bot.on('messageCreate', async (message) => {
           console.log(`[Rainlink] URL load completed. Result type: ${searchResult?.type || 'unknown'}`);
           console.log(`[Rainlink] Has tracks: ${searchResult?.tracks ? 'yes' : 'no'}, Track count: ${searchResult?.tracks?.length || 0}`);
           
+          // Log provider/source for mirrored tracks (helps debug YouTube vs other sources)
+          if (searchResult?.tracks?.[0]) {
+            const track = searchResult.tracks[0];
+            console.log(`[Rainlink] Track source: ${track.sourceName || 'unknown'}, identifier: ${track.identifier || 'N/A'}`);
+            if (track.pluginInfo) {
+              console.log(`[Rainlink] Plugin info: ${JSON.stringify(track.pluginInfo).substring(0, 100)}...`);
+            }
+          }
+          
           // If no results from player.search(), try manager-level search
           if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
             console.log(`[Rainlink] No results from player.search(), trying rainlink.search()...`);
@@ -756,6 +765,15 @@ bot.on('messageCreate', async (message) => {
           });
           console.log(`[Rainlink] Player search completed. Result type: ${searchResult?.type || 'unknown'}`);
           console.log(`[Rainlink] Has tracks: ${searchResult?.tracks ? 'yes' : 'no'}, Track count: ${searchResult?.tracks?.length || 0}`);
+          
+          // Log provider/source for mirrored tracks
+          if (searchResult?.tracks?.[0]) {
+            const track = searchResult.tracks[0];
+            console.log(`[Rainlink] Track source: ${track.sourceName || 'unknown'}, identifier: ${track.identifier || 'N/A'}`);
+            if (track.pluginInfo) {
+              console.log(`[Rainlink] Plugin info: ${JSON.stringify(track.pluginInfo).substring(0, 100)}...`);
+            }
+          }
           
           // If no results, try manager-level search as fallback
           if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
