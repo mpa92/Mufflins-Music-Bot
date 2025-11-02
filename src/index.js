@@ -68,7 +68,11 @@ if (!TOKEN) {
 }
 
 // Parse Lavalink URL (host:port)
-const [lavalinkHost, lavalinkPort = LAVALINK_SECURE ? '443' : '2333'] = LAVALINK_URL.split(':');
+// If no port specified, default based on secure flag: 443 for secure (HTTPS), 2333 for insecure (HTTP)
+const urlParts = LAVALINK_URL.split(':');
+const lavalinkHost = urlParts[0];
+const lavalinkPort = urlParts[1] || (LAVALINK_SECURE ? '443' : '2333');
+console.log(`[Config] Parsed Lavalink connection: ${lavalinkHost}:${lavalinkPort} (secure: ${LAVALINK_SECURE})`);
 
 // Initialize bot client
 const bot = new Client({
@@ -270,6 +274,7 @@ bot.once('ready', () => {
   loadIconCache();
   
   console.log('[Rainlink] Initializing Rainlink...');
+  console.log(`[Rainlink] Connection details: ${lavalinkHost}:${lavalinkPort} (secure: ${LAVALINK_SECURE}, name: ${LAVALINK_NAME})`);
   
   // Initialize Rainlink with Discord.js library connector
   rainlink = new Rainlink({
@@ -288,6 +293,8 @@ bot.once('ready', () => {
       defaultVolume: 50
     }
   });
+  
+  console.log(`[Rainlink] Rainlink initialized. Bot user ID: ${bot.user?.id || 'NOT AVAILABLE'}`);
 
       // Rainlink event handlers
       rainlink.on('nodeConnect', (node) => {
