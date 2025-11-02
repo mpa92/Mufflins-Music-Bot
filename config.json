@@ -1,8 +1,9 @@
 {
   "lavalink": {
-    "host": "localhost",
-    "port": 2333,
-    "password": "youshallnotpass"
+    "host": "lava.jirayu.net",
+    "port": 13592,
+    "password": "youshallnotpass",
+    "secure": false
   }
 }
 
