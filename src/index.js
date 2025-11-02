@@ -714,6 +714,12 @@ bot.on('messageCreate', async (message) => {
       
       if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
         console.error(`[Rainlink] No results - full result:`, JSON.stringify(searchResult, null, 2));
+        
+        // Special message for Spotify URLs (Lavalink doesn't support them natively)
+        if (isUrl && (query.includes('spotify.com') || query.includes('open.spotify.com'))) {
+          return void message.reply('❌ Spotify URLs are not supported. Lavalink requires the `lavasrc` plugin for Spotify support. Please search for the song name instead (e.g., `mm!play song name`).');
+        }
+        
         return void message.reply('No results found. This may be a Lavalink server configuration issue - check if YouTube source is enabled.');
       }
       
