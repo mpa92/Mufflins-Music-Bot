@@ -119,6 +119,7 @@ async function resolveSpotifyToYouTube(spotifyUrl) {
       return null;
     }
     const data = await res.json();
+    console.log(`[Spotify] oEmbed response:`, JSON.stringify(data, null, 2));
     // data.title is like "ARTIST - TRACK" or "TRACK"
     const title = (data?.title || '').replace(/\s*\(.*?\)\s*$/,'').trim();
     if (title) {
