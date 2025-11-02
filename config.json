@@ -1,8 +1,8 @@
 {
   "lavalink": {
-    "host": "lavalink.alfari.id",
+    "host": "lavalink-server-production-a362.up.railway.app",
     "port": 443,
-    "password": "catfein",
+    "password": "youshallnotpass",
     "secure": true
   }
 }
