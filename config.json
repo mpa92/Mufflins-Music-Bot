@@ -1,9 +1,9 @@
 {
   "lavalink": {
-    "host": "lava.inzeworld.com",
-    "port": 3128,
-    "password": "saher.inzeworld.com",
-    "secure": false
+    "host": "lavalink.alfari.id",
+    "port": 443,
+    "password": "catfein",
+    "secure": true
   }
 }
 
