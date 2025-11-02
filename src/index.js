@@ -391,6 +391,10 @@ bot.once('ready', () => {
 
       rainlink.on('nodeError', (node, error) => {
         console.error(`[Rainlink] Node ${node.name} error:`, error);
+        // Handle JSON parsing errors from Lavalink (malformed exception payloads)
+        if (error.message && error.message.includes('JSON')) {
+          console.error(`[Rainlink] JSON parsing error (likely malformed exception payload from Lavalink):`, error.message);
+        }
       });
 
       // Track last sent "Now playing" message to prevent duplicates
@@ -453,10 +457,42 @@ bot.once('ready', () => {
       });
 
       rainlink.on('trackResolveError', (player, track, error) => {
-        console.error(`[${player.guildId}] Track error: ${track?.title || 'Unknown'} - ${error.message}`);
+        console.error(`[${player.guildId}] Track resolve error: ${track?.title || 'Unknown'} - ${error.message}`);
         const channel = bot.channels.cache.get(player.textId);
         if (channel) {
           channel.send(`❌ Playback error: ${error.message || 'Unknown error'}`).catch(() => {});
+        }
+      });
+
+      // Handle track exception events (playback failures after track starts)
+      rainlink.on('trackException', (player, track, exception) => {
+        console.error(`[${player.guildId}] Track exception: ${track?.title || 'Unknown'}`);
+        console.error(`[${player.guildId}] Exception details:`, exception);
+        
+        const channel = bot.channels.cache.get(player.textId);
+        if (channel) {
+          // Check if it's the YouTube cipher error
+          const errorMsg = exception?.message || exception?.cause || 'Unknown error';
+          const isYouTubeCipherError = errorMsg.includes('ScriptExtractionException') || 
+                                      errorMsg.includes('sig function') ||
+                                      errorMsg.includes('signature cipher');
+          
+          if (isYouTubeCipherError) {
+            channel.send('❌ **YouTube cipher extraction failed**\n\nThis is a known issue with YouTube\'s changing script format. The track cannot be played right now.\n\n**Workaround:** Try searching by song name instead: `mm!play song name`').catch(() => {});
+          } else {
+            channel.send(`❌ **Playback failed**: ${errorMsg}`).catch(() => {});
+          }
+        }
+        
+        // Skip to next track if available
+        if (player.queue.length > 0) {
+          setTimeout(() => {
+            if (player.queue.length > 0 && !player.playing) {
+              player.play().catch(err => {
+                console.error(`[${player.guildId}] Error playing next track after exception:`, err.message);
+              });
+            }
+          }, 1000);
         }
       });
 
