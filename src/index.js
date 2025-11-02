@@ -277,9 +277,25 @@ bot.once('ready', () => {
   console.log('[Rainlink] Initializing Rainlink...');
   console.log(`[Rainlink] Connection details: ${lavalinkHost}:${lavalinkPort} (secure: ${LAVALINK_SECURE}, name: ${LAVALINK_NAME})`);
   
-  // Initialize Rainlink with Discord.js library connector
+  // Create library connector and patch it to always return bot user ID
+  const libraryConnector = new Library.DiscordJS(bot);
+  
+  // Patch getId() method to always return bot user ID (prevents error 1011)
+  const originalGetId = libraryConnector.getId.bind(libraryConnector);
+  libraryConnector.getId = function() {
+    const userId = bot.user?.id;
+    if (userId) {
+      return userId;
+    }
+    // Fallback to original method if user ID not available
+    return originalGetId();
+  };
+  
+  console.log(`[Rainlink] Library connector created, patched getId(). Test: ${libraryConnector.getId()}`);
+  
+  // Initialize Rainlink with patched library connector
   rainlink = new Rainlink({
-    library: new Library.DiscordJS(bot),
+    library: libraryConnector,
     nodes: [
       {
         name: LAVALINK_NAME,
@@ -297,10 +313,27 @@ bot.once('ready', () => {
   
   console.log(`[Rainlink] Rainlink initialized. Bot user ID: ${bot.user?.id || 'NOT AVAILABLE'}`);
   
-  // Check nodes and manually add if needed
+  // CRITICAL: Set manager ID explicitly to prevent error 1011 (undefined user ID)
+  if (bot.user && bot.user.id) {
+    rainlink.id = bot.user.id;
+    console.log(`[Rainlink] Manager ID set explicitly: ${rainlink.id}`);
+  } else {
+    console.warn(`[Rainlink] WARNING: Bot user ID not available yet, manager ID: ${rainlink.id}`);
+  }
+  
+  // Check nodes and manually add if needed (wait a bit for user ID to be fully ready)
   setTimeout(() => {
+    // Double-check manager ID is set
+    if (!rainlink.id || rainlink.id === 'undefined') {
+      if (bot.user && bot.user.id) {
+        rainlink.id = bot.user.id;
+        console.log(`[Rainlink] Manager ID set in timeout: ${rainlink.id}`);
+      }
+    }
+    
     let nodes = rainlink.nodes.all();
     console.log(`[Rainlink] Initial nodes check: ${nodes.length} nodes found`);
+    console.log(`[Rainlink] Manager ID before adding node: ${rainlink.id}`);
     
     if (nodes.length === 0) {
       console.log(`[Rainlink] No nodes found, adding node manually...`);
@@ -339,6 +372,21 @@ bot.once('ready', () => {
       rainlink.on('nodeDisconnect', (node, reason) => {
         const nodeName = node?.name || node?.options?.name || 'Unknown';
         console.warn(`[Rainlink] ⚠️ Disconnected from Lavalink node: ${nodeName} - Reason: ${reason}`);
+        
+        // If error 1011 (undefined user ID), ensure manager ID is set before reconnect
+        if (reason === 1011 || reason === '1011') {
+          console.warn(`[Rainlink] Error 1011 detected - verifying manager ID...`);
+          if (bot.user && bot.user.id) {
+            if (!rainlink.id || rainlink.id === 'undefined') {
+              rainlink.id = bot.user.id;
+              console.log(`[Rainlink] Manager ID set to: ${rainlink.id}`);
+            } else {
+              console.log(`[Rainlink] Manager ID already set: ${rainlink.id}`);
+            }
+          } else {
+            console.error(`[Rainlink] ERROR: Bot user ID not available!`);
+          }
+        }
       });
 
       rainlink.on('nodeError', (node, error) => {
