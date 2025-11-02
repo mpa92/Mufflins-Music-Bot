@@ -297,13 +297,37 @@ bot.once('ready', () => {
   
   console.log(`[Rainlink] Rainlink initialized. Bot user ID: ${bot.user?.id || 'NOT AVAILABLE'}`);
   
-  // Check initial node status
+  // Check nodes and manually add if needed
   setTimeout(() => {
-    const nodes = rainlink.nodes.all();
-    console.log(`[Rainlink] Nodes available: ${nodes.length}`);
-    nodes.forEach(node => {
-      console.log(`[Rainlink] Node "${node.options?.name || 'Unknown'}": state=${node.state}, online=${node.online}`);
-    });
+    let nodes = rainlink.nodes.all();
+    console.log(`[Rainlink] Initial nodes check: ${nodes.length} nodes found`);
+    
+    if (nodes.length === 0) {
+      console.log(`[Rainlink] No nodes found, adding node manually...`);
+      try {
+        const addedNode = rainlink.nodes.add({
+          name: LAVALINK_NAME,
+          host: lavalinkHost,
+          port: parseInt(lavalinkPort),
+          auth: LAVALINK_PASSWORD,
+          secure: LAVALINK_SECURE
+        });
+        console.log(`[Rainlink] Node added manually: ${addedNode?.options?.name || addedNode?.name || 'Unknown'}`);
+        nodes = rainlink.nodes.all();
+      } catch (error) {
+        console.error(`[Rainlink] Error adding node manually:`, error.message);
+      }
+    }
+    
+    // Log final node status
+    if (nodes.length > 0) {
+      nodes.forEach(node => {
+        const nodeName = node?.name || node?.options?.name || 'Unknown';
+        console.log(`[Rainlink] Node "${nodeName}": state=${node.state}, online=${node.online}`);
+      });
+    } else {
+      console.warn(`[Rainlink] WARNING: Still no nodes available after adding attempt!`);
+    }
   }, 1000);
 
       // Rainlink event handlers
