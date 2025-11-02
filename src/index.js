@@ -68,14 +68,11 @@ if (!TOKEN) {
 }
 
 // Parse Lavalink URL (host:port format)
-// Expected format: "hostname:port" (e.g., "lavalink-server.up.railway.app:443")
-// For Railway deployments, the port should be included in LAVALINK_URL
+// Format can be "hostname" or "hostname:port"
+// If no port specified, defaults to 443 for secure (HTTPS) or 2333 for insecure (HTTP)
 const urlParts = LAVALINK_URL.split(':');
 const lavalinkHost = urlParts[0];
-const lavalinkPort = urlParts[1] || (LAVALINK_SECURE ? '443' : '2333'); // Fallback only if port missing
-if (!urlParts[1]) {
-  console.warn(`[Config] WARNING: No port specified in LAVALINK_URL. Using default: ${lavalinkPort}`);
-}
+const lavalinkPort = urlParts[1] || (LAVALINK_SECURE ? '443' : '2333');
 console.log(`[Config] Parsed Lavalink connection: ${lavalinkHost}:${lavalinkPort} (secure: ${LAVALINK_SECURE})`);
 
 // Initialize bot client
