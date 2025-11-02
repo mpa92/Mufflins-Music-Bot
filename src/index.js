@@ -465,14 +465,21 @@ bot.once('ready', () => {
         }
       });
 
-      // Handle track exception events (simple - like yesterday)
+      // Handle track exception events
       rainlink.on('trackException', (player, track, exception) => {
         console.error(`[${player.guildId}] Track exception: ${track?.title || 'Unknown'}`);
         console.error(`[${player.guildId}] Exception:`, exception?.message || exception?.cause || 'Unknown');
         
         const channel = bot.channels.cache.get(player.textId);
         if (channel) {
-          channel.send(`❌ Failed to play: ${track?.title || 'Unknown track'}`).catch(() => {});
+          const errorMsg = exception?.message || exception?.cause || '';
+          // Check if it's a sign-in error (happens with some Spotify/YouTube tracks)
+          if (errorMsg.includes('Please sign in') || errorMsg.includes('requires login')) {
+            const trackInfo = track?.title && track?.author ? `${track.title} ${track.author}` : (track?.title || 'this track');
+            channel.send(`❌ Failed to play: **${track?.title || 'Unknown'}**\n\nTry searching by name instead: \`mm!play ${trackInfo}\``).catch(() => {});
+          } else {
+            channel.send(`❌ Failed to play: ${track?.title || 'Unknown track'}`).catch(() => {});
+          }
         }
         
         // Skip to next track if available
