@@ -648,7 +648,13 @@ bot.on('messageCreate', async (message) => {
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
       const hasSearchPrefix = query.startsWith('ytsearch:') || query.startsWith('scsearch:') || query.startsWith('spsearch:');
       
-      if (!isUrl && !hasSearchPrefix) {
+      // Check for YouTube URLs - deprecated YouTube source can't handle direct URLs well
+      // Users should search by song name instead, or YouTube source plugin needs to be installed
+      if (isUrl && (query.includes('youtube.com') || query.includes('youtu.be'))) {
+        // Try the URL directly first, but provide helpful error if it fails
+        searchQuery = query;
+        console.log(`[Rainlink] Attempting YouTube URL (may fail - deprecated source limitation)`);
+      } else if (!isUrl && !hasSearchPrefix) {
         searchQuery = `ytsearch:${query}`;
       }
       
@@ -675,39 +681,69 @@ bot.on('messageCreate', async (message) => {
         setupAutoDisconnect(message.guild.id, voiceChannel.id);
       }
       
-      // Search for tracks
-      console.log(`[Rainlink] Searching with query: "${searchQuery}"`);
+      // For URLs, try direct load first (more reliable than search)
+      // For text queries, use search
       let searchResult;
       try {
-        // Try player.search() first (recommended method)
-        searchResult = await player.search(searchQuery, {
-          requester: message.author
-        });
-        console.log(`[Rainlink] Player search completed. Result type: ${searchResult?.type || 'unknown'}`);
-        console.log(`[Rainlink] Has tracks: ${searchResult?.tracks ? 'yes' : 'no'}, Track count: ${searchResult?.tracks?.length || 0}`);
-        
-        // If no results, try manager-level search as fallback
-        if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
-          console.log(`[Rainlink] No results from player.search(), trying rainlink.search()...`);
-          try {
-            const managerResult = await rainlink.search(searchQuery, {
-              requester: message.author,
-              nodeName: LAVALINK_NAME
-            });
-            if (managerResult && managerResult.tracks && managerResult.tracks.length > 0) {
-              console.log(`[Rainlink] Manager search successful! Track count: ${managerResult.tracks.length}`);
-              searchResult = managerResult;
-            } else {
-              console.log(`[Rainlink] Manager search also returned no results`);
+        if (isUrl) {
+          // For direct URLs, use search which handles both URLs and searches
+          console.log(`[Rainlink] Loading URL: "${searchQuery}"`);
+          searchResult = await player.search(searchQuery, {
+            requester: message.author
+          });
+          console.log(`[Rainlink] URL load completed. Result type: ${searchResult?.type || 'unknown'}`);
+          console.log(`[Rainlink] Has tracks: ${searchResult?.tracks ? 'yes' : 'no'}, Track count: ${searchResult?.tracks?.length || 0}`);
+          
+          // If no results from player.search(), try manager-level search
+          if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
+            console.log(`[Rainlink] No results from player.search(), trying rainlink.search()...`);
+            try {
+              const managerResult = await rainlink.search(searchQuery, {
+                requester: message.author,
+                nodeName: LAVALINK_NAME
+              });
+              if (managerResult && managerResult.tracks && managerResult.tracks.length > 0) {
+                console.log(`[Rainlink] Manager search successful! Track count: ${managerResult.tracks.length}`);
+                searchResult = managerResult;
+              } else {
+                console.log(`[Rainlink] Manager search also returned no results`);
+              }
+            } catch (managerError) {
+              console.error(`[Rainlink] Manager search error:`, managerError.message);
             }
-          } catch (managerError) {
-            console.error(`[Rainlink] Manager search error:`, managerError.message);
+          }
+        } else {
+          // For text searches, use search
+          console.log(`[Rainlink] Searching with query: "${searchQuery}"`);
+          searchResult = await player.search(searchQuery, {
+            requester: message.author
+          });
+          console.log(`[Rainlink] Player search completed. Result type: ${searchResult?.type || 'unknown'}`);
+          console.log(`[Rainlink] Has tracks: ${searchResult?.tracks ? 'yes' : 'no'}, Track count: ${searchResult?.tracks?.length || 0}`);
+          
+          // If no results, try manager-level search as fallback
+          if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
+            console.log(`[Rainlink] No results from player.search(), trying rainlink.search()...`);
+            try {
+              const managerResult = await rainlink.search(searchQuery, {
+                requester: message.author,
+                nodeName: LAVALINK_NAME
+              });
+              if (managerResult && managerResult.tracks && managerResult.tracks.length > 0) {
+                console.log(`[Rainlink] Manager search successful! Track count: ${managerResult.tracks.length}`);
+                searchResult = managerResult;
+              } else {
+                console.log(`[Rainlink] Manager search also returned no results`);
+              }
+            } catch (managerError) {
+              console.error(`[Rainlink] Manager search error:`, managerError.message);
+            }
           }
         }
       } catch (searchError) {
-        console.error(`[Rainlink] Search error:`, searchError);
+        console.error(`[Rainlink] Search/load error:`, searchError);
         await message.reactions.removeAll().catch(() => {});
-        return void message.reply(`Error searching: ${searchError.message || 'Unknown error'}`);
+        return void message.reply(`Error loading track: ${searchError.message || 'Unknown error'}`);
       }
 
       await message.reactions.removeAll().catch(() => {});
@@ -715,12 +751,18 @@ bot.on('messageCreate', async (message) => {
       if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
         console.error(`[Rainlink] No results - full result:`, JSON.stringify(searchResult, null, 2));
         
-        // Special message for Spotify URLs (Lavalink doesn't support them natively)
+        // Special message for Spotify URLs
         if (isUrl && (query.includes('spotify.com') || query.includes('open.spotify.com'))) {
-          return void message.reply('❌ Spotify URLs are not supported. Lavalink requires the `lavasrc` plugin for Spotify support. Please search for the song name instead (e.g., `mm!play song name`).');
+          return void message.reply('❌ Spotify URLs returned no results. Make sure:\n1. Lavasrc plugin is installed on your Lavalink server\n2. `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` are set in Railway\n3. Lavalink server has been redeployed after adding the plugin\n\nOr search by song name instead (e.g., `mm!play song name`).');
         }
         
-        return void message.reply('No results found. This may be a Lavalink server configuration issue - check if YouTube source is enabled.');
+        // For YouTube URLs - provide specific guidance
+        if (isUrl && (query.includes('youtube.com') || query.includes('youtu.be'))) {
+          return void message.reply('❌ YouTube URLs are not working. The deprecated YouTube source cannot handle direct URLs.\n\n**Solutions:**\n1. Search by song name instead: `mm!play song name`\n2. Add YouTube Source plugin to Lavalink server (recommended)\n\nExample: `mm!play right now partynextdoor`');
+        }
+        
+        // For other sources
+        return void message.reply('No results found. Please check:\n1. Your Lavalink server logs for errors\n2. Network connectivity issues\n\nTry searching by song name instead: `mm!play song name`');
       }
       
       const result = searchResult;
