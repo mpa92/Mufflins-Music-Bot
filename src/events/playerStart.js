@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -49,41 +49,15 @@ module.exports = async (client, player, track) => {
         }
     }
 
-    // Control buttons
-    const row = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('previous')
-                .setEmoji('⏮️')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('pause')
-                .setEmoji('⏸️')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('skip')
-                .setEmoji('⏭️')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('loop')
-                .setEmoji('🔁')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('shuffle')
-                .setEmoji('🔀')
-                .setStyle(ButtonStyle.Success)
-        );
-
     try {
         const iconPath = getMufflinsIcon('nowplaying');
         if (iconPath && !thumbnail) {
             await channel.send({
                 embeds: [embed],
-                components: [row],
                 files: [{ attachment: iconPath, name: 'icon.png' }]
             });
         } else {
-            await channel.send({ embeds: [embed], components: [row] });
+            await channel.send({ embeds: [embed] });
         }
     } catch (error) {
         console.error('Error sending now playing message:', error);

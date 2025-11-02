@@ -18,12 +18,18 @@ module.exports = async (client, player) => {
     const channel = client.channels.cache.get(player.textId);
     if (!channel) return;
 
-    console.log(`[${player.guildId}] Queue is empty`);
+    // Double-check queue is actually empty (prevent false positives)
+    if (player.queue.size > 0) {
+        console.warn(`[${player.guildId}] playerEmpty event fired but queue has ${player.queue.size} tracks - ignoring`);
+        return;
+    }
+
+    console.log(`[${player.guildId}] Queue is empty (verified: ${player.queue.size} tracks)`);
 
     const embed = new EmbedBuilder()
         .setColor(0x8e7cc3) // Mufflins purple
         .setTitle('Queue Empty')
-        .setDescription('The queue has finished. Add more songs with `/play`!')
+        .setDescription('The queue has finished. Add more songs with `mm!play`!')
         .setTimestamp();
 
     const iconPath = getMufflinsIcon('queue');

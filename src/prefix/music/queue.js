@@ -1,6 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
 const { convertTime } = require('../../helpers/convertTime');
-const { NormalPage } = require('../../helpers/pageQueue');
 const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
@@ -98,13 +97,18 @@ module.exports = {
             pages.push(pageEmbed);
         }
 
-        if (pages.length === 1) {
-            return message.reply({ embeds: [pages[0]] });
+        // Send all pages as separate messages (text-only, no buttons)
+        for (let i = 0; i < pages.length; i++) {
+            const pageEmbed = pages[i].setFooter({
+                text: `Page ${i + 1}/${pages.length} | 📚 ${queueLength} Songs | ⏱️ ${queueDuration} Total Duration • Mufflins Music Bot`
+            });
+            
+            if (i === 0) {
+                await message.reply({ embeds: [pageEmbed] });
+            } else {
+                await message.channel.send({ embeds: [pageEmbed] });
+            }
         }
-
-        // Use pagination if multiple pages
-        const reply = await message.reply({ embeds: [pages[0]] });
-        await NormalPage(client, reply, pages, 300000, queueLength, queueDuration);
     }
 };
 

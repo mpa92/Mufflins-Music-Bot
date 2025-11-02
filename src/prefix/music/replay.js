@@ -1,63 +1,48 @@
-const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const { convertTime } = require('../../helpers/convertTime');
-const fs = require('fs');
-const path = require('path');
-
-// Helper to get Mufflins icon
-function getMufflinsIcon(commandName) {
-    const iconsDir = path.join(process.cwd(), 'mufflins icons');
-    if (!fs.existsSync(iconsDir)) return null;
-    
-    const iconFile = fs.readdirSync(iconsDir).find(file => 
-        file.toLowerCase().includes(commandName.toLowerCase())
-    );
-    
-    return iconFile ? path.join(iconsDir, iconFile) : null;
-}
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('replay')
-        .setDescription('🔄 Replay the current track from the beginning'),
-
-    async execute(interaction, client) {
-        const player = client.manager.players.get(interaction.guild.id);
+    name: 'replay',
+    aliases: ['restart'],
+    description: 'Replay the current track from the beginning',
+    usage: 'mm!replay',
+    
+    async execute(message, args, client) {
+        const player = client.manager.players.get(message.guild.id);
 
         if (!player) {
-            return interaction.reply({
+            return message.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x8e7cc3)
                         .setDescription('`🎵` | **No music is currently playing!**')
                         .setFooter({ text: 'Use mm!play to start playing music' })
-                ],
-                ephemeral: true
+                ]
             });
         }
 
-        const { channel } = interaction.member.voice;
-        if (!channel || interaction.member.voice.channel !== interaction.guild.members.me.voice.channel) {
-            return interaction.reply({
+        const { channel } = message.member.voice;
+        if (!channel || channel.id !== player.voiceId) {
+            return message.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x8e7cc3)
                         .setDescription('`🚫` | **You must be in the same voice channel as me to use this command!**')
                         .setFooter({ text: 'Join my voice channel to use music commands' })
-                ],
-                ephemeral: true
+                ]
             });
         }
 
         const track = player.queue.current;
         if (!track) {
-            return interaction.reply({
+            return message.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x8e7cc3)
                         .setDescription('`❌` | **There is no track to replay!**')
                         .setFooter({ text: 'Use mm!play to add some tracks' })
-                ],
-                ephemeral: true
+                ]
             });
         }
 
@@ -71,7 +56,7 @@ module.exports = {
 \`➤\` **Track:** [${track.title}](${track.uri})
 \`➤\` **Artist:** ${track.author}
 \`➤\` **Duration:** ${convertTime(track.length)}
-\`➤\` **Requested By:** ${interaction.user}
+\`➤\` **Requested By:** ${message.author}
 
 \`00:00 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ ${convertTime(track.length)}\`
             `)
@@ -84,11 +69,11 @@ module.exports = {
             ])
             .setFooter({ 
                 text: 'Track started from the beginning • Mufflins Music Bot', 
-                iconURL: interaction.user.displayAvatarURL() 
+                iconURL: message.author.displayAvatarURL() 
             })
             .setTimestamp();
 
-        return interaction.reply({ embeds: [embed] });
+        return message.reply({ embeds: [embed] });
     }
 };
 

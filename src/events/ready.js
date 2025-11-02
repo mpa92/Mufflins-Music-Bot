@@ -11,7 +11,7 @@ module.exports = {
             activities: [{
                 type: ActivityType.Custom,
                 name: "custom",
-                state: "🎵 Playing music | /help"
+                state: "🎵 Playing music | mm!help"
             }]
         });
 

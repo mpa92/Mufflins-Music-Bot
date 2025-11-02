@@ -35,7 +35,6 @@ module.exports = {
                 {
                     name: '🎶 Advanced Features',
                     value: [
-                        '`mm!lyrics` — Get lyrics for song',
                         '`mm!autoplay` — Toggle autoplay mode',
                         '`mm!previous` — Play previous track',
                         '`mm!forward [sec]` — Forward in track',

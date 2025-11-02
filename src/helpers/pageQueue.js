@@ -20,19 +20,33 @@ const NormalPage = async (client, message, pages, timeout, queueLength, queueDur
 
     let page = 0;
 
-    // Initial page embed
-    const curPage = await message.editReply({
-        embeds: [pages[page].setFooter({
-            text: `Page • ${page + 1}/${pages.length} | 📚 ${queueLength} Songs | ⏱️ ${queueDuration} Total Duration`
-        })],
-        components: [buttonRow],
-        allowedMentions: { repliedUser: false }
-    });
+    // Check if message is an interaction or a regular message
+    const isInteraction = typeof message.editReply === 'function';
+    
+    // Initial page embed - use edit() for messages, editReply() for interactions
+    const curPage = isInteraction 
+        ? await message.editReply({
+            embeds: [pages[page].setFooter({
+                text: `Page • ${page + 1}/${pages.length} | 📚 ${queueLength} Songs | ⏱️ ${queueDuration} Total Duration`
+            })],
+            components: [buttonRow],
+            allowedMentions: { repliedUser: false }
+        })
+        : await message.edit({
+            embeds: [pages[page].setFooter({
+                text: `Page • ${page + 1}/${pages.length} | 📚 ${queueLength} Songs | ⏱️ ${queueDuration} Total Duration`
+            })],
+            components: [buttonRow]
+        });
 
     if (pages.length === 0) return;
 
-    const filter = (interaction) => interaction.user.id === message.user.id;
-    const collector = await curPage.createMessageComponentCollector({ filter, time: timeout });
+    // Get user ID from message or interaction
+    const userId = message.author?.id || message.user?.id;
+    if (!userId) throw new Error('Unable to determine user ID');
+    
+    const filter = (interaction) => interaction.user.id === userId;
+    const collector = curPage.createMessageComponentCollector({ filter, time: timeout });
 
     collector.on('collect', async (interaction) => {
         if (!interaction.deferred) await interaction.deferUpdate();

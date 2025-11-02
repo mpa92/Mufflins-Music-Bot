@@ -38,7 +38,7 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0x8e7cc3)
                         .setDescription('`🎵` | **No music is currently playing!**')
-                        .setFooter({ text: 'Use /play to start playing music' })
+                        .setFooter({ text: 'Use mm!play to start playing music' })
                 ],
                 ephemeral: true
             });
@@ -86,7 +86,7 @@ module.exports = {
 \`➤\` **Moved To:** Position ${to + 1}
 \`➤\` **Requested By:** ${interaction.user}
             `)
-            .setFooter({ text: 'Use /queue to view the updated queue • Mufflins Music Bot' })
+            .setFooter({ text: 'Use mm!queue to view the updated queue • Mufflins Music Bot' })
             .setTimestamp();
 
         return interaction.reply({ embeds: [embed] });

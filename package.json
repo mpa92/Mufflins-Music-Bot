@@ -12,15 +12,20 @@
     "server": "node server.js",
     "build:css": "tailwindcss -i ./src/dashboard/CSS/styles.css -o ./src/dashboard/CSS/output.css --watch"
   },
-  "keywords": ["discord", "music", "bot", "mufflins"],
+  "keywords": [
+    "discord",
+    "music",
+    "bot",
+    "mufflins"
+  ],
   "author": "Mufflins",
   "license": "ISC",
   "dependencies": {
     "@discordjs/rest": "^2.0.0",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
-    "discord.js": "^14.24.2",
     "discord-api-types": "^0.37.0",
+    "discord.js": "^14.24.2",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
@@ -28,6 +33,7 @@
     "kazagumo": "^3.2.1",
     "kazagumo-filter": "^2.0.0",
     "llyrics": "^1.1.7",
+    "lodash.snakecase": "^4.1.1",
     "lyrics-finder": "^21.7.0",
     "mongodb": "^6.9.0",
     "mongoose": "^8.6.3",

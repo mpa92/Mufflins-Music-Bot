@@ -5,43 +5,47 @@ A powerful Discord music bot with the `mm!` prefix, featuring advanced playback 
 ## ✨ Features
 
 - 🎵 High-quality music playback using Lavalink
-- 🎮 Simple `mm!` prefix commands
+- 🎮 Simple `mm!` prefix commands (case-insensitive: `mm!`, `Mm!`, `MM!` all work)
 - 🎨 Custom Mufflins icons and branding
-- 📝 Lyrics support
 - 🔄 Autoplay mode
 - ⏩ Advanced controls (forward, rewind, replay)
-- 📊 Queue management with pagination
+- 📊 Queue management
 - 🔁 Loop modes (track & queue)
 - 🔀 Shuffle support
 - 🌐 Web dashboard API
+- 🎯 **Supported Sources:** Spotify, YouTube, SoundCloud, Deezer
 
 ## 🎮 Commands
 
-All commands use the `mm!` prefix:
+All commands use the `mm!` prefix (case-insensitive):
 
 ### 🎵 Music Commands
-- `mm!play <song>` - Play a song or playlist
+- `mm!play <song>` - Play a song or playlist (YouTube, Spotify, SoundCloud)
 - `mm!skip` - Skip the current song
 - `mm!pause` - Pause playback
 - `mm!resume` - Resume playback
 - `mm!stop` - Stop and clear queue
 - `mm!queue` - Show the queue
-- `mm!nowplaying` - Show current song with controls
+- `mm!nowplaying` - Show current song
 - `mm!volume <0-100>` - Set volume
-- `mm!loop` - Toggle loop mode for current track
+- `mm!loop` - Toggle loop mode (track/queue/off)
 - `mm!shuffle` - Shuffle the queue
+- `mm!seek <time>` - Seek to position (e.g., `1:30` or `90` seconds)
 
 ### 🎶 Advanced Features
-- `mm!lyrics [song]` - Get lyrics for current or specified song
 - `mm!autoplay` - Toggle autoplay mode (plays related songs)
 - `mm!previous` - Play the previous track
 - `mm!forward [seconds]` - Skip forward in track (default: 10s)
 - `mm!rewind [seconds]` - Go back in track (default: 10s)
 - `mm!replay` - Restart current track from beginning
+- `mm!remove <#>` - Remove a track from queue by position
+- `mm!clear` - Clear the queue (also stops current track)
 
 ### 📚 Other Commands
 - `mm!help` - Show all commands
 - `mm!ping` - Check bot latency
+- `mm!join` - Join voice channel
+- `mm!leave` - Leave voice channel
 
 ## 🚀 Quick Start
 
@@ -53,17 +57,24 @@ All commands use the `mm!` prefix:
    ```
 
 2. **Configure Environment**
-   Create a `.env` file (copy from `.env.example`):
+   Create a `.env` file:
    ```env
    TOKEN=your_discord_bot_token
    LAVALINK_HOST=localhost
    LAVALINK_PORT=2333
    LAVALINK_PASSWORD=youshallnotpass
    LAVALINK_SECURE=false
+   
+   # Optional - for better Spotify support
+   SPOTIFY_CLIENT_ID=your_spotify_client_id
+   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
    ```
 
-3. **Configure Lavalink**
-   Update `config.json` or use environment variables above
+3. **Start Lavalink Server**
+   ```bash
+   cd lavalink-server
+   java -jar Lavalink.jar
+   ```
 
 4. **Start the Bot**
    ```bash
@@ -72,17 +83,12 @@ All commands use the `mm!` prefix:
 
 ### Railway Deployment
 
-**Deploy to Railway in 3 steps:**
+1. **Deploy Lavalink Server**
+   - See `lavalink-server/README.md` for Railway deployment
+   - Get the public domain URL from Railway
 
-1. **Deploy Lavalink Server** (from your [lavalink-server](https://github.com/mpa92/lavalink-server) repo)
-   - Create new Railway project
-   - Deploy from GitHub repo: `lavalink-server`
-   - Set start command: `java -jar Lavalink.jar`
-   - Add env var: `JAVA_OPTS=-Xmx512M`
-   - Generate public domain and copy URL
-
-2. **Deploy Music Bot** (from your [Mufflins-Music-Bot](https://github.com/mpa92/Mufflins-Music-Bot) repo)
-   - Deploy from GitHub repo: `Mufflins-Music-Bot`
+2. **Deploy Music Bot**
+   - Deploy from GitHub
    - Set environment variables:
      ```env
      TOKEN=your_discord_bot_token
@@ -94,36 +100,42 @@ All commands use the `mm!` prefix:
 
 3. **Test in Discord**
    - Bot should show online
-   - Try `mm!play never gonna give you up`
-
-Bot auto-deploys on every push to GitHub!
+   - Try: `mm!play never gonna give you up`
 
 ## 📁 Project Structure
 
 ```
 mufflins-discord-bot/
 ├── src/
-│   ├── prefix/              # All mm! commands
-│   │   ├── music/          # Music commands
-│   │   └── other/          # Utility commands
-│   ├── events/             # Discord events
+│   ├── prefix/              # All mm! prefix commands
+│   │   ├── music/          # Music commands (play, skip, pause, etc.)
+│   │   └── other/          # Utility commands (help, ping)
+│   ├── events/             # Discord events (playerStart, playerEnd, etc.)
 │   ├── functions/          # Command handlers
-│   ├── helpers/            # Helper functions
+│   ├── helpers/            # Helper functions (formatting, icons)
 │   └── index.js            # Main bot file
-├── mufflins icons/         # Custom bot icons
+├── lavalink-server/        # Lavalink server files
+│   ├── Lavalink.jar        # Server executable
+│   ├── application.yml     # Server configuration
+│   ├── plugins/            # Plugin JAR files
+│   └── README.md           # Lavalink setup guide
+├── mufflins icons/         # Custom bot icons (optional)
 ├── server.js               # Web API server
-├── config.json             # Lavalink config
+├── config.json             # Lavalink fallback config
 ├── package.json
-└── .env                    # Bot token
+└── .env                    # Bot token & credentials
 ```
 
 ## 🎨 Custom Icons
 
 Place your custom Mufflins icons in the `mufflins icons/` folder. The bot will automatically use them when available!
 
+Supported icon names:
+- `play`, `pause`, `skip`, `queue`, `nowplaying`, `help`, etc.
+
 ## 🌐 Web Dashboard
 
-The bot includes a web server with API endpoints for:
+The bot includes a web server with API endpoints:
 - Player status
 - Queue management
 - Search functionality
@@ -133,28 +145,49 @@ Access at: `http://localhost:3000`
 
 ## 📝 Requirements
 
-- Node.js 20.x or higher
-- A running Lavalink server
-- Discord bot token
+- **Node.js** 20.x or higher
+- **Java** 17+ (for Lavalink server)
+- **Discord bot token**
+- **Lavalink server** (included in `lavalink-server/` folder)
 
 ## 🎵 Music Features
 
-- YouTube, SoundCloud, and Spotify support
-- High-quality audio streaming
-- Queue management
-- Loop modes (single track or entire queue)
-- Volume control
-- Seek functionality
-- Autoplay related songs
-- Lyrics fetching
+- **Multiple Sources:** YouTube, Spotify, SoundCloud, Deezer
+- **High-quality audio** streaming via Lavalink
+- **Queue management** with pagination
+- **Loop modes:** Single track or entire queue
+- **Volume control** (0-100%)
+- **Seek functionality** (jump to any position)
+- **Autoplay** related songs
+- **Shuffle** queue order
+- **Playlist support** (YouTube, Spotify)
 
 ## 🛠️ Technologies
 
 - **discord.js** - Discord API wrapper
 - **Kazagumo** - Music player manager
 - **Shoukaku** - Lavalink client
+- **Lavalink** - Audio streaming server
 - **Express** - Web server
 - **Node.js** - Runtime environment
+
+## 🔧 Configuration
+
+### Lavalink Connection
+
+The bot connects to Lavalink using:
+1. Environment variables (`.env`) - **recommended**
+2. Fallback to `config.json`
+
+### Spotify Support
+
+For best Spotify experience, add to `.env`:
+```env
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+```
+
+Get credentials from: https://developer.spotify.com/dashboard
 
 ## 📄 License
 

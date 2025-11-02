@@ -33,22 +33,29 @@ module.exports = {
             });
         }
 
-        if (player.queue.size === 0) {
+        // Check if there's a current track to skip
+        if (!player.queue.current) {
             return message.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x8e7cc3)
-                        .setDescription('`❌` | **There are no more tracks in the queue!**')
-                        .setFooter({ text: 'The current track will finish playing' })
+                        .setDescription('`❌` | **There is no track currently playing!**')
+                        .setFooter({ text: 'Use mm!play to start playing music' })
                 ]
             });
         }
 
+        const hadMoreTracks = player.queue.size > 0;
         player.skip();
+
+        let description = '`⏭️` | **Skipped the current track!**';
+        if (!hadMoreTracks) {
+            description += '\n`📭` | **Queue is now empty.**';
+        }
 
         const embed = new EmbedBuilder()
             .setColor(0x8e7cc3)
-            .setDescription('`⏭️` | **Skipped the current track!**')
+            .setDescription(description)
             .setFooter({ text: 'Mufflins Music Bot' });
 
         const iconPath = getMufflinsIcon('skip');

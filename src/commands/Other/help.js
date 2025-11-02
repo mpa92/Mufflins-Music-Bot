@@ -20,51 +20,47 @@ module.exports = {
         const embed = new EmbedBuilder()
             .setColor(0x8e7cc3)
             .setTitle('🎵 Mufflins Music Bot — Help')
-            .setDescription('Here are all the available commands:\n**Slash Commands:** `/command`\n**Prefix Commands:** `mm!command`')
+            .setDescription('Here are all the available commands:\n**Prefix:** `mm!`')
             .addFields(
                 {
                     name: '🎵 Music Commands',
                     value: [
-                        '`/play` — Play a song or playlist',
-                        '`/skip` — Skip the current song',
-                        '`/pause` — Pause playback',
-                        '`/resume` — Resume playback',
-                        '`/stop` — Stop and clear queue',
-                        '`/queue` — Show the queue',
-                        '`/nowplaying` — Show current song',
-                        '`/volume` — Set volume (0-100)',
-                        '`/shuffle` — Shuffle the queue',
-                        '`/loop` — Toggle loop mode',
-                        '`/loopqueue` — Loop entire queue',
-                        '`/clear` — Clear the queue',
-                        '`/remove` — Remove a track',
-                        '`/seek` — Seek to a position',
-                        '`/join` — Join voice channel',
-                        '`/leave` — Leave voice channel'
+                        '`mm!play <song>` — Play a song or playlist',
+                        '`mm!skip` — Skip the current song',
+                        '`mm!pause` — Pause playback',
+                        '`mm!resume` — Resume playback',
+                        '`mm!stop` — Stop and clear queue',
+                        '`mm!queue` — Show the queue',
+                        '`mm!nowplaying` — Show current song',
+                        '`mm!volume <0-100>` — Set volume',
+                        '`mm!loop` — Toggle loop mode',
+                        '`mm!shuffle` — Shuffle the queue',
+                        '`mm!seek` — Seek to a position',
+                        '`mm!join` — Join voice channel',
+                        '`mm!leave` — Leave voice channel'
                     ].join('\n'),
                     inline: false
                 },
                 {
                     name: '🎶 Advanced Features',
                     value: [
-                        '`/lyrics` — Get lyrics for song',
-                        '`/autoplay` — Toggle autoplay',
-                        '`/previous` — Play previous track',
-                        '`/forward` — Forward in track',
-                        '`/rewind` — Rewind in track',
-                        '`/replay` — Restart current track',
-                        '`/skipto` — Skip to position',
-                        '`/move` — Move track position'
+                        '`mm!autoplay` — Toggle autoplay',
+                        '`mm!previous` — Play previous track',
+                        '`mm!forward [sec]` — Forward in track',
+                        '`mm!rewind [sec]` — Rewind in track',
+                        '`mm!replay` — Restart current track',
+                        '`mm!remove <#>` — Remove a track',
+                        '`mm!clear` — Clear the queue'
                     ].join('\n'),
                     inline: false
                 },
                 {
                     name: '📚 Other Commands',
-                    value: '`/help` — Show this help message\n`/ping` — Check bot latency',
+                    value: '`mm!help` — Show this help message\n`mm!ping` — Check bot latency',
                     inline: false
                 }
             )
-            .setFooter({ text: 'Mufflins Music Bot • Both / and mm! work!', iconURL: client.user.displayAvatarURL() })
+            .setFooter({ text: 'Mufflins Music Bot • Prefix: mm!', iconURL: client.user.displayAvatarURL() })
             .setTimestamp();
 
         const iconPath = getMufflinsIcon('help');

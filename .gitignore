@@ -3,8 +3,7 @@ node_modules/
 .DS_Store
 *.log
 
-# Lavalink files (moved to lavalink-server directory)
-# The lavalink-server directory should be uploaded separately to Railway as a separate repository
+# Lavalink server (deployed in separate repository)
 lavalink-server/
 
 # OS files

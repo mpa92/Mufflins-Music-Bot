@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const { convertTime } = require('../../helpers/convertTime');
 const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
@@ -52,43 +52,22 @@ module.exports = {
                 { name: '`👥` Requested By', value: `${track.requester || 'Unknown'}`, inline: true }
             ])
             .setThumbnail(track.thumbnail || client.user.displayAvatarURL())
-            .setFooter({ text: 'Mufflins Music Bot', iconURL: client.user.displayAvatarURL() })
+            .setFooter({ 
+                text: 'Use mm!skip, mm!pause, mm!resume, mm!loop, mm!shuffle for controls • Mufflins Music Bot', 
+                iconURL: client.user.displayAvatarURL() 
+            })
             .setTimestamp();
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('previous')
-                .setEmoji('⏮️')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId(player.paused ? 'resume' : 'pause')
-                .setEmoji(player.paused ? '▶️' : '⏸️')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('skip')
-                .setEmoji('⏭️')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('loop')
-                .setEmoji('🔁')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('shuffle')
-                .setEmoji('🔀')
-                .setStyle(ButtonStyle.Secondary)
-        );
 
         const iconPath = getMufflinsIcon('nowplaying');
         if (iconPath && !embed.data.thumbnail) {
             embed.setThumbnail('attachment://icon.png');
             return message.reply({ 
                 embeds: [embed], 
-                components: [row],
                 files: [{ attachment: iconPath, name: 'icon.png' }]
             });
         }
 
-        return message.reply({ embeds: [embed], components: [row] });
+        return message.reply({ embeds: [embed] });
     }
 };
 

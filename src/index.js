@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const { Connectors } = require("shoukaku");
 const { Kazagumo, Plugins } = require("kazagumo");
@@ -27,7 +27,7 @@ const Nodes = [{
         `${process.env.LAVALINK_HOST}:${process.env.LAVALINK_PORT || 443}` : 
         `${config.lavalink.host}:${config.lavalink.port}`,
     auth: process.env.LAVALINK_PASSWORD || config.lavalink.password,
-    secure: process.env.LAVALINK_SECURE === 'true' || false
+    secure: process.env.LAVALINK_SECURE === 'true' || (process.env.LAVALINK_HOST ? false : config.lavalink.secure)
 }];
 
 console.log(`🔗 Connecting to Lavalink: ${Nodes[0].url} (secure: ${Nodes[0].secure})`);
@@ -49,7 +49,7 @@ client.manager.shoukaku.on('ready', (name) => {
 });
 
 client.manager.shoukaku.on('error', (name, error) => {
-    console.error(`❌ Lavalink node "${name}" error:`, error.message);
+    console.error(`❌ Lavalink node "${name}" error:`, error?.message || error || 'Unknown error');
 });
 
 client.manager.shoukaku.on('close', (name, code, reason) => {
@@ -67,6 +67,8 @@ client.prefixCommands = new Map();
 const functions = fs.readdirSync("./src/functions").filter(file => file.endsWith(".js"));
 const eventFiles = fs.readdirSync("./src/events").filter(file => file.endsWith(".js"));
 const prefixCommandFolders = fs.readdirSync("./src/prefix");
+
+// Button interactions removed - all functionality now uses text commands only
 
 // Load all handlers
 (async () => {
@@ -92,8 +94,12 @@ const prefixCommandFolders = fs.readdirSync("./src/prefix");
 // Prefix command handler
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
-    if (!message.content.startsWith(PREFIX)) return;
+    
+    // Case-insensitive prefix check - accepts mm!, Mm!, mM!, MM!
+    const contentLower = message.content.toLowerCase();
+    if (!contentLower.startsWith(PREFIX.toLowerCase())) return;
 
+    // Slice using actual prefix length (always 3 for "mm!")
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const commandName = args.shift().toLowerCase();
 
@@ -131,91 +137,151 @@ client.manager.on('playerEnd', (player) => {
     playerEndEvent(client, player);
 });
 
-// Handle button interactions for player controls (from mm!nowplaying buttons)
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return;
+// Periodic check for stuck tracks (every 60 seconds)
+// Only runs after bot is ready to avoid startup issues
+setInterval(() => {
+    if (!client.managerReady) return;
 
-    const player = client.manager.players.get(interaction.guild.id);
-    if (!player) return interaction.reply({ content: 'No music is currently playing!', ephemeral: true });
-
-    // Check if user is in same voice channel
-    const { channel } = interaction.member.voice;
-    if (!channel || channel.id !== player.voiceId) {
-        return interaction.reply({ content: 'You must be in the same voice channel as me!', ephemeral: true });
-    }
-
-    try {
-        switch (interaction.customId) {
-            case 'skip':
-                if (player.queue.size === 0) {
-                    return interaction.reply({ content: 'No more tracks in the queue to skip!', ephemeral: true });
-                }
+    client.manager.players.forEach(async (player) => {
+        // Check if player should be playing but isn't (not paused, queue has tracks, current track exists)
+        if (player && !player.paused && !player.playing && player.queue.size > 0 && player.queue.current) {
+            console.warn(`[${player.guildId}] Track may have stopped unexpectedly - attempting recovery`);
+            // Try to resume playback
+            try {
+                await player.play();
+                console.log(`[${player.guildId}] Successfully resumed playback`);
+            } catch (err) {
+                console.error(`[${player.guildId}] Resume failed:`, err?.message || err);
+                // Only skip if queue has multiple tracks (don't skip if it's the last one)
+                if (player.queue.size > 1) {
+                    console.log(`[${player.guildId}] Skipping to next track (${player.queue.size - 1} remaining)`);
                 player.skip();
-                await interaction.reply({ content: '⏭️ Skipped the current track!', ephemeral: true });
-                break;
-
-            case 'shuffle':
-                if (player.queue.size === 0) {
-                    return interaction.reply({ content: 'Queue is empty!', ephemeral: true });
-                }
-                player.queue.shuffle();
-                await interaction.reply({ content: '🔀 Shuffled the queue!', ephemeral: true });
-                break;
-
-            case 'loop':
-                if (player.loop === 'track') {
-                    player.setLoop('none');
-                    await interaction.reply({ content: '🔁 Looping is now disabled.', ephemeral: true });
                 } else {
-                    player.setLoop('track');
-                    await interaction.reply({ content: '🔁 Looping the current track.', ephemeral: true });
+                    console.warn(`[${player.guildId}] Cannot skip - only ${player.queue.size} track(s) remaining`);
                 }
-                break;
-
-            case 'previous':
-                const previous = player.getPrevious();
-                if (!previous) {
-                    return interaction.reply({ content: 'No previous track found!', ephemeral: true });
-                }
-                await player.play(player.getPrevious(true));
-                await interaction.reply({ content: '⏮️ Playing previous track!', ephemeral: true });
-                break;
-
-            case 'pause':
-                if (player.paused) {
-                    return interaction.reply({ content: 'The player is already paused!', ephemeral: true });
-                }
-                player.pause(true);
-                await interaction.reply({ content: '⏸️ Paused the music!', ephemeral: true });
-                break;
-
-            case 'resume':
-                if (!player.paused) {
-                    return interaction.reply({ content: 'The player is already playing!', ephemeral: true });
-                }
-                player.pause(false);
-                await interaction.reply({ content: '▶️ Resumed the music!', ephemeral: true });
-                break;
-
-            case 'queue':
-                const queue = player.queue;
-                const queueEmbed = new EmbedBuilder()
-                    .setTitle('Current Queue')
-                    .setDescription(Array.from(queue).slice(0, 10).map((track, index) => 
-                        `${index + 1}. **[${track.title}](${track.uri})**`
-                    ).join('\n') || 'No tracks in queue.')
-                    .setColor(0x8e7cc3)
-                    .setFooter({ text: `Total: ${queue.size} tracks` });
-                await interaction.reply({ embeds: [queueEmbed], ephemeral: true });
-                break;
-
-            default:
-                await interaction.reply({ content: 'Unknown action!', ephemeral: true });
-                break;
+            }
         }
-    } catch (error) {
-        console.error('Button interaction error:', error);
-        await interaction.reply({ content: 'An error occurred!', ephemeral: true }).catch(() => {});
+    });
+}, 60000); // Check every 60 seconds
+
+// Handle player errors/exceptions
+client.manager.shoukaku.on('error', (name, error) => {
+    console.error(`❌ Lavalink node "${name}" error:`, error?.message || error || 'Unknown error');
+});
+
+// Handle player exceptions (track errors)
+client.manager.on('playerException', (player, track, error) => {
+    console.error(`[${player.guildId}] Track exception:`, track?.title || 'Unknown');
+    console.error(`[${player.guildId}] Error:`, error?.message || error || 'Unknown error');
+    
+    const channel = client.channels.cache.get(player.textId);
+    if (channel) {
+        const errorMsg = error?.message || error?.toString() || '';
+        const errorStr = errorMsg.toLowerCase();
+        
+        // Handle YouTube script parsing errors (deprecated source failing)
+        if (errorStr.includes('must find action functions from script') || 
+            errorStr.includes('problematic youtube player script') ||
+            errorStr.includes('youtube signature cipher')) {
+            const trackInfo = track?.title && track?.author ? `${track.author} ${track.title}` : (track?.title || 'this track');
+            channel.send({
+                embeds: [{
+                    color: 0x8e7cc3,
+                    description: `\`⚠️\` | **YouTube track failed to load**\n\nThis may be due to YouTube's player script changes.\n\n**Try searching instead:**\n\`mm!play ${trackInfo}\``
+                }]
+            }).catch(() => {});
+        }
+        // Handle Spotify/Youtube mirroring errors (400, 401, 403) - auto-retry with SoundCloud
+        else if (errorStr.includes('invalid status code') && (errorStr.includes('400') || errorStr.includes('401') || errorStr.includes('403'))) {
+            // Check if this is a Spotify track that failed
+            if (track?.uri && track.uri.includes('spotify.com')) {
+                const trackInfo = track?.title && track?.author ? `${track.author} ${track.title}` : (track?.title || 'this track');
+                
+                // Auto-retry with SoundCloud search
+                channel.send({
+                    embeds: [{
+                        color: 0x8e7cc3,
+                        description: `\`⚠️\` | **YouTube mirroring failed, trying SoundCloud...**\n\nTrack: ${trackInfo}`
+                    }]
+                }).catch(() => {});
+                
+                // Try to find and play from SoundCloud
+                setTimeout(async () => {
+                    try {
+                        const scResult = await player.search(`scsearch:${trackInfo}`, { id: 'auto-retry' });
+                        if (scResult.tracks.length > 0) {
+                            const scTrack = scResult.tracks[0];
+                            scTrack.requester = { id: 'system' };
+                            player.queue.unshift(scTrack); // Add to front of queue
+                            await player.play();
+                            channel.send({
+                                embeds: [{
+                                    color: 0x8e7cc3,
+                                    description: `\`✅\` | **Playing from SoundCloud:** ${scTrack.title}`
+                                }]
+                            }).catch(() => {});
+                        } else {
+                            channel.send({
+                                embeds: [{
+                                    color: 0x8e7cc3,
+                                    description: `\`❌\` | **SoundCloud search failed too**\n\nTry: \`mm!play ${trackInfo}\``
+                                }]
+                            }).catch(() => {});
+                        }
+                    } catch (retryError) {
+                        console.error(`[${player.guildId}] SoundCloud retry error:`, retryError);
+                    }
+                }, 500);
+            } else {
+                const trackInfo = track?.title && track?.author ? `${track.author} ${track.title}` : (track?.title || 'this track');
+                channel.send({
+                    embeds: [{
+                        color: 0x8e7cc3,
+                        description: `\`❌\` | **Failed to play track**\n\nTry searching by name:\n\`mm!play ${trackInfo}\``
+                    }]
+                }).catch(() => {});
+            }
+        } else if (errorStr.includes('please sign in') || errorStr.includes('requires login') || errorStr.includes('sign in')) {
+            const trackInfo = track?.title && track?.author ? `${track.author} ${track.title}` : (track?.title || 'this track');
+            channel.send({
+                embeds: [{
+                    color: 0x8e7cc3,
+                    description: `\`❌\` | **Failed to play: ${track?.title || 'Unknown track'}**\n\nYouTube requires authentication for this video.\nTry searching by name instead: \`mm!play ${trackInfo}\``
+                }]
+            }).catch(() => {});
+        } else {
+            channel.send({
+                embeds: [{
+                    color: 0x8e7cc3,
+                    description: `\`❌\` | **Failed to play: ${track?.title || 'Unknown track'}**\n\nError: ${errorMsg.substring(0, 200)}`
+                }]
+            }).catch(() => {});
+        }
+    }
+    
+    // Try to skip to next track if available
+    // IMPORTANT: Only skip if queue actually has tracks (prevent accidental queue clearing)
+    if (player.queue.size > 0 && player.queue.current) {
+        setTimeout(async () => {
+            // Double-check queue still has tracks before trying to play
+            if (player.queue.size > 0 && !player.playing && player.queue.current) {
+                try {
+                    await player.play();
+                    console.log(`[${player.guildId}] Successfully played next track after exception`);
+                } catch (err) {
+                    console.error(`[${player.guildId}] Error playing next track after exception:`, err.message);
+                    // If play fails, try skip instead but ONLY if queue has more tracks
+                    if (player.queue.size > 1) {
+                        console.log(`[${player.guildId}] Attempting to skip to next track (${player.queue.size - 1} remaining)`);
+                        player.skip();
+                    } else {
+                        console.warn(`[${player.guildId}] Cannot skip - only 1 track remaining and play failed`);
+                    }
+                }
+            }
+        }, 1000);
+    } else {
+        console.warn(`[${player.guildId}] Track exception - queue is empty or no current track`);
     }
 });
 

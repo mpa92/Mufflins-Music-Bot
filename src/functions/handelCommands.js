@@ -4,36 +4,29 @@ const fs = require('fs');
 
 module.exports = (client) => {
     client.handleCommands = async (commandFolders, path) => {
-        client.commandArray = [];
-        for (folder of commandFolders) {
-            const commandFiles = fs.readdirSync(`${path}/${folder}`).filter(file => file.endsWith('.js'));
-            for (const file of commandFiles) {
-                const command = require(`../commands/${folder}/${file}`);
-                client.commands.set(command.data.name, command);
-                client.commandArray.push(command.data.toJSON());
-            }
-        }
-
+        // Slash commands disabled - using prefix commands only (mm!)
+        console.log('⚠️  Slash commands are disabled. Using prefix commands (mm!) only.');
+        
         const rest = new REST({
             version: '9'
         }).setToken(process.env.TOKEN);
 
         const clientId = client.user.id;
 
+        // Delete all existing slash commands
         (async () => {
             try {
-                console.log('Started refreshing application (/) commands.');
-
-                // Register commands globally instead of guild-specific
+                console.log('🗑️  Removing all slash commands from Discord...');
+                
                 await rest.put(
                     Routes.applicationCommands(clientId), {
-                        body: client.commandArray
+                        body: [] // Empty array = delete all commands
                     },
                 );
 
-                console.log('Successfully reloaded application (/) commands.');
+                console.log('✅ All slash commands have been removed.');
             } catch (error) {
-                console.error(error);
+                console.error('Error removing slash commands:', error);
             }
         })();
     };
