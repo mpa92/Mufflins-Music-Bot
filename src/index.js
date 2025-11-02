@@ -256,37 +256,6 @@ function formatDuration(ms) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-// Safe play function - waits for voice connection before playing
-async function safePlay(player, track, options = {}) {
-  // Wait until player state is connected (state 0 = Connected)
-  if (player.state !== 0) {
-    console.log(`[${player.guildId}] Waiting for voice connection (current state: ${player.state})...`);
-    await new Promise((res) => {
-      const timeout = setTimeout(() => {
-        console.warn(`[${player.guildId}] Voice connection timeout after 5 seconds (state: ${player.state})`);
-        clearInterval(interval);
-        res(); // Continue anyway after timeout
-      }, 5000);
-      
-      const interval = setInterval(() => {
-        if (player.state === 0) {
-          console.log(`[${player.guildId}] Voice connection established (state: 0)`);
-          clearTimeout(timeout);
-          clearInterval(interval);
-          res();
-        }
-      }, 50);
-    });
-  } else {
-    console.log(`[${player.guildId}] Voice already connected (state: 0), playing immediately`);
-  }
-  
-  // Additional small delay to ensure voice handshake is complete
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  // Play with default volume if not specified
-  await player.play(track, { volume: options.volume || 50, ...options });
-}
 
 function buildEmbed(title, description, commandForIcon, color = 0x8e7cc3) {
   const embed = new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).setTimestamp();
@@ -496,115 +465,14 @@ bot.once('ready', () => {
         }
       });
 
-      // Handle track exception events (playback failures after track starts)
+      // Handle track exception events (simple - like yesterday)
       rainlink.on('trackException', (player, track, exception) => {
-        console.log(`[${player.guildId}] ===== TRACK EXCEPTION HANDLER TRIGGERED =====`);
         console.error(`[${player.guildId}] Track exception: ${track?.title || 'Unknown'}`);
-        console.error(`[${player.guildId}] Exception details:`, JSON.stringify(exception, null, 2).substring(0, 300));
-        console.log(`[${player.guildId}] Track source: ${track?.sourceName}, identifier: ${track?.identifier}`);
-        console.log(`[${player.guildId}] Track info:`, JSON.stringify(track?.info || {}, null, 2).substring(0, 200));
+        console.error(`[${player.guildId}] Exception:`, exception?.message || exception?.cause || 'Unknown');
         
         const channel = bot.channels.cache.get(player.textId);
-        if (!channel) {
-          console.error(`[${player.guildId}] No text channel found for player.textId: ${player.textId}`);
-          return;
-        }
-        
-        // Check for specific error types
-        const errorMsg = exception?.message || exception?.cause || 'Unknown error';
-        console.log(`[${player.guildId}] Error message: "${errorMsg}"`);
-        
-        const isYouTubeCipherError = errorMsg.includes('ScriptExtractionException') || 
-                                    errorMsg.includes('sig function') ||
-                                    errorMsg.includes('signature cipher');
-        const isSignInError = errorMsg.includes('Please sign in') || 
-                             errorMsg.includes('requires login') ||
-                             errorMsg.includes('This video requires login');
-        
-        console.log(`[${player.guildId}] Error classification: signIn=${isSignInError}, cipher=${isYouTubeCipherError}`);
-        
-        if (isSignInError) {
-          // Extract best guess query from track info
-          const info = track?.info || {};
-          const title = (info.title || track?.title || '').replace(/["""]/g, '').trim();
-          const author = (info.author || track?.author || '').replace(/["""]/g, '').trim();
-          const isrc = info.isrc || track?.info?.isrc;
-          
-          // Build base query: "artist title"
-          const qBase = author && title ? `${author} ${title}`.trim() : (title || author || 'unknown');
-          
-          console.log(`[${player.guildId}] Auto-retry: title="${title}", author="${author}", isrc="${isrc || 'none'}"`);
-          
-          // Check if this is from Spotify (which mirrors to YouTube)
-          const isSpotifyTrack = track?.sourceName === 'spotify' || track?.identifier?.includes('spotify');
-          const isYouTubeTrack = track?.identifier?.includes('youtube.com') || track?.identifier?.includes('youtu.be');
-          
-          if (isSpotifyTrack || isYouTubeTrack) {
-            // Build safe fallback queries (YT Music first, then YT)
-            const queries = [];
-            if (isrc) queries.push(`ytmsearch:"${isrc}"`);
-            if (qBase) {
-              queries.push(
-                `ytmsearch:${qBase} audio`,
-                `ytmsearch:${qBase} lyrics`,
-                isrc ? `ytsearch:"${isrc}"` : null,
-                `ytsearch:${qBase} audio`,
-                `ytsearch:${qBase} lyrics`,
-                `ytsearch:${qBase}`
-              );
-            }
-            
-            console.log(`[${player.guildId}] Auto-retry: Built ${queries.filter(Boolean).length} fallback queries`);
-            channel.send(`⚠️ Track requires auth - automatically searching for alternative...`).catch(() => {});
-            
-            // Execute sequential searches until one returns tracks
-            setTimeout(async () => {
-              try {
-                const textChannel = bot.channels.cache.get(player.textId);
-                const requester = textChannel?.lastMessage?.author || { id: bot.user.id };
-                
-                for (const q of queries.filter(Boolean)) {
-                  console.log(`[${player.guildId}] Auto-retry: Trying "${q}"`);
-                  try {
-                    const res = await player.search(q, { requester: requester });
-                    
-                    if (res && res.tracks && Array.isArray(res.tracks) && res.tracks.length > 0) {
-                      // Filter out Topic channels if possible
-                      const filteredTracks = res.tracks.filter(t => {
-                        const uploader = (t?.author || '').toLowerCase();
-                        const trackTitle = (t?.title || '').toLowerCase();
-                        return !uploader.includes('topic') && !trackTitle.includes('provided to youtube');
-                      });
-                      
-                      const selectedTrack = filteredTracks.length > 0 ? filteredTracks[0] : res.tracks[0];
-                      console.log(`[${player.guildId}] Auto-retry: Found alternative with "${q}": ${selectedTrack.title}`);
-                      
-                      // Replace current track instead of queuing
-                      await safePlay(player, selectedTrack);
-                      channel.send(`✅ Found alternative: **${selectedTrack.title}** - Now playing`).catch(() => {});
-                      return;
-                    }
-                  } catch (queryError) {
-                    console.log(`[${player.guildId}] Query "${q}" failed:`, queryError.message);
-                    continue;
-                  }
-                }
-                
-                // Last resort message
-                console.log(`[${player.guildId}] Auto-retry: No alternatives found after trying all queries`);
-                channel.send(`❌ That upload seems login-gated on YouTube. I couldn't find a non-gated version. Try: \`mm!play ${qBase} -topic audio\``).catch(() => {});
-              } catch (retryError) {
-                console.error(`[${player.guildId}] Auto-retry error:`, retryError);
-                channel.send(`❌ Auto-retry failed. Try manually: \`mm!play ${qBase} -topic audio\``).catch(() => {});
-              }
-            }, 500);
-          } else {
-            channel.send(`❌ **Couldn't play this video**\n\nThis specific video requires authentication (some videos are age-restricted or region-locked).\n\n**Easy fix:** Search by song name to find a different upload:\n\`mm!play ${qBase}\``).catch(() => {});
-          }
-        } else if (isYouTubeCipherError) {
-          channel.send('❌ **YouTube cipher extraction failed**\n\nThis is a known issue with YouTube\'s changing script format. The track cannot be played right now.\n\n**Workaround:** Try searching by song name instead: `mm!play song name`').catch(() => {});
-        } else {
-          channel.send(`❌ **Playback failed**: ${errorMsg}`).catch(() => {});
+        if (channel) {
+          channel.send(`❌ Failed to play: ${track?.title || 'Unknown track'}`).catch(() => {});
         }
         
         // Skip to next track if available
@@ -612,7 +480,7 @@ bot.once('ready', () => {
           setTimeout(() => {
             if (player.queue.length > 0 && !player.playing) {
               player.play().catch(err => {
-                console.error(`[${player.guildId}] Error playing next track after exception:`, err.message);
+                console.error(`[${player.guildId}] Error playing next track:`, err.message);
               });
             }
           }, 1000);
@@ -754,11 +622,6 @@ bot.on('messageCreate', async (message) => {
     const voiceChannel = message.member?.voice?.channel;
     if (!voiceChannel) return void message.reply('Join a voice channel first.');
     
-    // Check if it's a Stage channel (bot needs to be a speaker)
-    if (voiceChannel.isStage && voiceChannel.isStage()) {
-      return void message.reply('⚠️ **Stage Channel Detected**\n\nStage channels require the bot to be a **speaker**. Please:\n1. Right-click the bot in the member list\n2. Click "Invite to Speak"\n3. Or make the bot a speaker manually\n\nThen try playing music again.');
-    }
-    
     // Check permissions
     const permissions = voiceChannel.permissionsFor(message.guild.members.me);
     if (!permissions?.has(['Connect', 'Speak'])) {
@@ -836,29 +699,7 @@ bot.on('messageCreate', async (message) => {
         });
         setupAutoDisconnect(message.guild.id, voiceChannel.id);
         
-        // Wait for voice connection to be established before proceeding
-        console.log(`[${player.guildId}] Waiting for voice connection after player creation (state: ${player.state})...`);
-        let connectionEstablished = false;
-        await new Promise((resolve) => {
-          const timeout = setTimeout(() => {
-            console.warn(`[${player.guildId}] Voice connection timeout after 5 seconds (state: ${player.state}), proceeding anyway`);
-            clearInterval(interval);
-            resolve();
-          }, 5000);
-          
-          const interval = setInterval(() => {
-            if (player.state === 0) {
-              console.log(`[${player.guildId}] Voice connection established (state: 0)`);
-              connectionEstablished = true;
-              clearTimeout(timeout);
-              clearInterval(interval);
-              resolve();
-            }
-          }, 50);
-        });
-        
-        // Additional brief wait for handshake to complete
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 500));
       } else if (player.voiceId !== voiceChannel.id) {
         player.setVoiceChannel(voiceChannel.id);
         setupAutoDisconnect(message.guild.id, voiceChannel.id);
@@ -985,7 +826,7 @@ bot.on('messageCreate', async (message) => {
           if (player.paused) {
             await player.setPause(false);
           }
-          await safePlay(player, result.tracks[0]);
+          await player.play(result.tracks[0]);
         }
         
         return void message.channel.send(buildEmbed('Added to Queue', addedText, 'queue'));
@@ -997,7 +838,7 @@ bot.on('messageCreate', async (message) => {
         if (player.playing) {
           player.queue.add(track);
         } else {
-          await safePlay(player, track);
+          await player.play(track);
         }
         
         if (wasAlreadyPlaying) {
