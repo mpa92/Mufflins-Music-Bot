@@ -722,15 +722,10 @@ bot.on('messageCreate', async (message) => {
       // Format query for search
       let searchQuery = query;
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
-      const hasSearchPrefix = query.startsWith('ytsearch:') || query.startsWith('scsearch:') || query.startsWith('spsearch:');
+      const hasSearchPrefix = query.startsWith('ytsearch:') || query.startsWith('ytmsearch:') || query.startsWith('scsearch:') || query.startsWith('spsearch:');
       
-      // Check for YouTube URLs - currently failing due to signature cipher extraction issues
-      // For now, recommend searching by song name instead until plugin is updated
-      if (isUrl && (query.includes('youtube.com') || query.includes('youtu.be'))) {
-        // Try the URL directly - may fail due to YouTube script format changes
-        searchQuery = query;
-        console.log(`[Rainlink] Attempting YouTube URL (may fail due to YouTube script format changes)`);
-      } else if (!isUrl && !hasSearchPrefix) {
+      // Add search prefix only if needed
+      if (!isUrl && !hasSearchPrefix) {
         searchQuery = `ytsearch:${query}`;
       }
       
