@@ -679,11 +679,31 @@ bot.on('messageCreate', async (message) => {
       console.log(`[Rainlink] Searching with query: "${searchQuery}"`);
       let searchResult;
       try {
+        // Try player.search() first (recommended method)
         searchResult = await player.search(searchQuery, {
           requester: message.author
         });
-        console.log(`[Rainlink] Search completed. Result type: ${searchResult?.type || 'unknown'}`);
+        console.log(`[Rainlink] Player search completed. Result type: ${searchResult?.type || 'unknown'}`);
         console.log(`[Rainlink] Has tracks: ${searchResult?.tracks ? 'yes' : 'no'}, Track count: ${searchResult?.tracks?.length || 0}`);
+        
+        // If no results, try manager-level search as fallback
+        if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
+          console.log(`[Rainlink] No results from player.search(), trying rainlink.search()...`);
+          try {
+            const managerResult = await rainlink.search(searchQuery, {
+              requester: message.author,
+              nodeName: LAVALINK_NAME
+            });
+            if (managerResult && managerResult.tracks && managerResult.tracks.length > 0) {
+              console.log(`[Rainlink] Manager search successful! Track count: ${managerResult.tracks.length}`);
+              searchResult = managerResult;
+            } else {
+              console.log(`[Rainlink] Manager search also returned no results`);
+            }
+          } catch (managerError) {
+            console.error(`[Rainlink] Manager search error:`, managerError.message);
+          }
+        }
       } catch (searchError) {
         console.error(`[Rainlink] Search error:`, searchError);
         await message.reactions.removeAll().catch(() => {});
@@ -694,7 +714,7 @@ bot.on('messageCreate', async (message) => {
       
       if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
         console.error(`[Rainlink] No results - full result:`, JSON.stringify(searchResult, null, 2));
-        return void message.reply('No results found.');
+        return void message.reply('No results found. This may be a Lavalink server configuration issue - check if YouTube source is enabled.');
       }
       
       const result = searchResult;
