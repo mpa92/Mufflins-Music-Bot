@@ -333,7 +333,7 @@ bot.once('ready', () => {
       }
     ],
     options: {
-      // Don't set defaultSearchEngine - we handle search prefixes manually
+      defaultSearchEngine: 'youtube',
       defaultVolume: 50
     }
   });
@@ -650,12 +650,14 @@ bot.on('messageCreate', async (message) => {
     let query = args.join(' ');
     if (!query) return void message.reply('Provide a YouTube/Spotify link or search text.');
     
-    // Convert Spotify URLs to YouTube searches (client-side, no server plugins needed)
+    // Convert Spotify URLs to song titles (client-side, no server plugins needed)
+    // Let Rainlink's defaultSearchEngine handle adding the ytsearch: prefix
     if (SPOTIFY_TRACK_RE.test(query) || SPOTIFY_ALBUM_RE.test(query)) {
       const spotifyTitle = await resolveSpotifyToYouTube(query);
       if (spotifyTitle) {
-        query = `ytsearch:${spotifyTitle} audio`;
-        console.log(`[Spotify] Converted to YouTube search: "${query}"`);
+        // Just use the title - Rainlink will add ytsearch: prefix automatically
+        query = `${spotifyTitle} audio`;
+        console.log(`[Spotify] Converted to search: "${query}" (Rainlink will add ytsearch: prefix)`);
       } else {
         return void message.reply('❌ Failed to resolve Spotify URL. Try searching by song name instead.');
       }
@@ -716,18 +718,11 @@ bot.on('messageCreate', async (message) => {
         console.log(`[Rainlink] Node connected, proceeding with play command...`);
       }
       
-      // Get or create player first (needed for voice channel checks)
+      // Get or create player
       let player = rainlink.players.get(message.guild.id);
       
-      // Format query for search
+      // Use query as-is (Rainlink will add ytsearch: prefix via defaultSearchEngine if needed)
       let searchQuery = query;
-      const isUrl = query.startsWith('http://') || query.startsWith('https://');
-      const hasSearchPrefix = query.startsWith('ytsearch:') || query.startsWith('ytmsearch:') || query.startsWith('scsearch:') || query.startsWith('spsearch:');
-      
-      // Add search prefix only if needed
-      if (!isUrl && !hasSearchPrefix) {
-        searchQuery = `ytsearch:${query}`;
-      }
       
       if (!player) {
         player = await rainlink.create({
