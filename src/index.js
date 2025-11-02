@@ -648,12 +648,12 @@ bot.on('messageCreate', async (message) => {
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
       const hasSearchPrefix = query.startsWith('ytsearch:') || query.startsWith('scsearch:') || query.startsWith('spsearch:');
       
-      // Check for YouTube URLs - deprecated YouTube source can't handle direct URLs well
-      // Users should search by song name instead, or YouTube source plugin needs to be installed
+      // Check for YouTube URLs - currently failing due to signature cipher extraction issues
+      // For now, recommend searching by song name instead until plugin is updated
       if (isUrl && (query.includes('youtube.com') || query.includes('youtu.be'))) {
-        // Try the URL directly first, but provide helpful error if it fails
+        // Try the URL directly - may fail due to YouTube script format changes
         searchQuery = query;
-        console.log(`[Rainlink] Attempting YouTube URL (may fail - deprecated source limitation)`);
+        console.log(`[Rainlink] Attempting YouTube URL (may fail due to YouTube script format changes)`);
       } else if (!isUrl && !hasSearchPrefix) {
         searchQuery = `ytsearch:${query}`;
       }
@@ -756,9 +756,9 @@ bot.on('messageCreate', async (message) => {
           return void message.reply('❌ Spotify URLs returned no results. Make sure:\n1. Lavasrc plugin is installed on your Lavalink server\n2. `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` are set in Railway\n3. Lavalink server has been redeployed after adding the plugin\n\nOr search by song name instead (e.g., `mm!play song name`).');
         }
         
-        // For YouTube URLs - provide specific guidance
+        // For YouTube URLs - provide specific guidance about current limitation
         if (isUrl && (query.includes('youtube.com') || query.includes('youtu.be'))) {
-          return void message.reply('❌ YouTube URLs are not working. The deprecated YouTube source cannot handle direct URLs.\n\n**Solutions:**\n1. Search by song name instead: `mm!play song name`\n2. Add YouTube Source plugin to Lavalink server (recommended)\n\nExample: `mm!play right now partynextdoor`');
+          return void message.reply('❌ YouTube URLs are currently not working due to YouTube\'s script format changes.\n\n**Workaround:**\nSearch by song name instead: `mm!play song name`\n\nExample: `mm!play right now partynextdoor`\n\nThis is a known issue with the YouTube plugin - YouTube frequently changes their player script format, and the plugin needs updates to handle it.');
         }
         
         // For other sources
