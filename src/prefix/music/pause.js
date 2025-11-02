@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'pause',
@@ -45,14 +46,21 @@ module.exports = {
 
         player.pause(true);
 
-        return message.reply({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(0x8e7cc3)
-                    .setDescription('`⏸️` | **Paused the music!**')
-                    .setFooter({ text: 'Mufflins Music Bot' })
-            ]
-        });
+        const embed = new EmbedBuilder()
+            .setColor(0x8e7cc3)
+            .setDescription('`⏸️` | **Paused the music!**')
+            .setFooter({ text: 'Mufflins Music Bot' });
+
+        const iconPath = getMufflinsIcon('pause');
+        if (iconPath) {
+            embed.setThumbnail('attachment://icon.png');
+            return message.reply({ 
+                embeds: [embed],
+                files: [{ attachment: iconPath, name: 'icon.png' }]
+            });
+        }
+
+        return message.reply({ embeds: [embed] });
     }
 };
 

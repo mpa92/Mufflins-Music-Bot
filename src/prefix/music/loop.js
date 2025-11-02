@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'loop',

@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'volume',
@@ -58,14 +59,21 @@ module.exports = {
 
         player.setVolume(volume);
 
-        return message.reply({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(0x8e7cc3)
-                    .setDescription(`\`🔊\` | **Volume set to:** ${volume}%`)
-                    .setFooter({ text: 'Mufflins Music Bot' })
-            ]
-        });
+        const embed = new EmbedBuilder()
+            .setColor(0x8e7cc3)
+            .setDescription(`\`🔊\` | **Volume set to:** ${volume}%`)
+            .setFooter({ text: 'Mufflins Music Bot' });
+
+        const iconPath = getMufflinsIcon('volume');
+        if (iconPath) {
+            embed.setThumbnail('attachment://icon.png');
+            return message.reply({ 
+                embeds: [embed],
+                files: [{ attachment: iconPath, name: 'icon.png' }]
+            });
+        }
+
+        return message.reply({ embeds: [embed] });
     }
 };
 

@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { convertTime } = require('../../helpers/convertTime');
 const { NormalPage } = require('../../helpers/pageQueue');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'queue',
@@ -59,12 +60,24 @@ module.exports = {
             .setThumbnail(current.thumbnail || client.user.displayAvatarURL())
             .setTimestamp();
 
+        const iconPath = getMufflinsIcon('queue');
+        if (iconPath && !currentEmbed.data.thumbnail) {
+            currentEmbed.setThumbnail('attachment://icon.png');
+        }
+
         if (queue.length === 0) {
             currentEmbed.addFields({
                 name: '`📑` Up Next',
                 value: 'No tracks in queue',
                 inline: false
             });
+            
+            if (iconPath && !currentEmbed.data.thumbnail) {
+                return message.reply({ 
+                    embeds: [currentEmbed],
+                    files: [{ attachment: iconPath, name: 'icon.png' }]
+                });
+            }
             return message.reply({ embeds: [currentEmbed] });
         }
 

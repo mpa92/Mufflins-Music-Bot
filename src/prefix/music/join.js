@@ -1,4 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'join',
@@ -75,14 +76,21 @@ module.exports = {
                 deaf: true
             });
 
-            return message.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0x8e7cc3)
-                        .setDescription(`\`🎵\` | **Joined ${channel.name}!**`)
-                        .setFooter({ text: 'Use mm!play to start playing music • Mufflins Music Bot' })
-                ]
-            });
+            const embed = new EmbedBuilder()
+                .setColor(0x8e7cc3)
+                .setDescription(`\`🎵\` | **Joined ${channel.name}!**`)
+                .setFooter({ text: 'Use mm!play to start playing music • Mufflins Music Bot' });
+
+            const iconPath = getMufflinsIcon('join');
+            if (iconPath) {
+                embed.setThumbnail('attachment://icon.png');
+                return message.reply({ 
+                    embeds: [embed],
+                    files: [{ attachment: iconPath, name: 'icon.png' }]
+                });
+            }
+
+            return message.reply({ embeds: [embed] });
         } catch (error) {
             console.error('Join Error:', error);
             return message.reply({

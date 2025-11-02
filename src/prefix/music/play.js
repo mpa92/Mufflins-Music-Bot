@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const { convertTime } = require('../../helpers/convertTime');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'play',
@@ -133,16 +134,30 @@ module.exports = {
                 if (track.uri && (track.uri.includes('youtube.com') || track.uri.includes('youtu.be'))) {
                     const videoId = track.uri.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
                     if (videoId) {
-                        embed.setThumbnail(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`);
+                    embed.setThumbnail(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`);
+                } else {
+                    const iconPath = getMufflinsIcon('play');
+                    if (iconPath) {
+                        embed.setThumbnail('attachment://icon.png');
                     }
                 }
+            }
 
+            const iconPath = getMufflinsIcon('play');
+            if (iconPath && !embed.data.thumbnail) {
+                embed.setThumbnail('attachment://icon.png');
+                await loadingMsg.edit({ 
+                    embeds: [embed],
+                    files: [{ attachment: iconPath, name: 'icon.png' }]
+                });
+            } else {
                 await loadingMsg.edit({ embeds: [embed] });
             }
+        }
 
-            if (!player.playing && !player.paused) {
-                await player.play();
-            }
+        if (!player.playing && !player.paused) {
+            await player.play();
+        }
         } catch (error) {
             console.error('Play Error:', error);
             return loadingMsg.edit({
