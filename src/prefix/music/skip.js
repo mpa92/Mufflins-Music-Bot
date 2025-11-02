@@ -46,7 +46,22 @@ module.exports = {
         }
 
         const hadMoreTracks = player.queue.size > 0;
-        player.skip();
+        const currentTrackTitle = player.queue.current.title;
+        
+        // Skip the current track
+        try {
+            await player.skip();
+        } catch (error) {
+            console.error('[Skip] Error skipping track:', error);
+            return message.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x8e7cc3)
+                        .setDescription('`❌` | **Failed to skip the track!**')
+                        .setFooter({ text: 'Please try again' })
+                ]
+            });
+        }
 
         let description = '`⏭️` | **Skipped the current track!**';
         if (!hadMoreTracks) {

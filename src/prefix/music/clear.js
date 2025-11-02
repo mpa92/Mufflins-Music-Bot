@@ -24,17 +24,17 @@ module.exports = {
         const queueSize = player.queue.size;
         const wasPlaying = player.playing || player.queue.current;
 
-        // Stop the current track if playing
+        // Clear the queue first (this removes all queued tracks)
+        player.queue.clear();
+        
+        // Stop the current track if playing - destroy player to fully stop
         if (wasPlaying) {
             try {
-                await player.stop();
+                await player.destroy();
             } catch (error) {
                 console.error('[Clear] Error stopping track:', error);
             }
         }
-
-        // Clear the queue
-        player.queue.clear();
 
         // Build response message
         let description = '';
