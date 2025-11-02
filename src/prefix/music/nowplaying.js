@@ -1,5 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { convertTime } = require('../../helpers/convertTime');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'nowplaying',
@@ -76,6 +77,16 @@ module.exports = {
                 .setEmoji('🔀')
                 .setStyle(ButtonStyle.Secondary)
         );
+
+        const iconPath = getMufflinsIcon('nowplaying');
+        if (iconPath && !embed.data.thumbnail) {
+            embed.setThumbnail('attachment://icon.png');
+            return message.reply({ 
+                embeds: [embed], 
+                components: [row],
+                files: [{ attachment: iconPath, name: 'icon.png' }]
+            });
+        }
 
         return message.reply({ embeds: [embed], components: [row] });
     }

@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { getMufflinsIcon } = require('../../helpers/iconHelper');
 
 module.exports = {
     name: 'help',
@@ -53,6 +54,15 @@ module.exports = {
             )
             .setFooter({ text: 'Mufflins Music Bot • Prefix: mm!', iconURL: client.user.displayAvatarURL() })
             .setTimestamp();
+
+        const iconPath = getMufflinsIcon('help');
+        if (iconPath) {
+            embed.setThumbnail('attachment://icon.png');
+            return message.reply({ 
+                embeds: [embed],
+                files: [{ attachment: iconPath, name: 'icon.png' }]
+            });
+        }
 
         return message.reply({ embeds: [embed] });
     }
