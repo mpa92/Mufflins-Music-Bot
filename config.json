@@ -1,8 +1,8 @@
 {
   "lavalink": {
-    "host": "lava.jirayu.net",
-    "port": 13592,
-    "password": "youshallnotpass",
+    "host": "lava.inzeworld.com",
+    "port": 3128,
+    "password": "saher.inzeworld.com",
     "secure": false
   }
 }
