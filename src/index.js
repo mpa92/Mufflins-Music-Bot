@@ -25,19 +25,21 @@ const isSecure = process.env.LAVALINK_SECURE !== undefined ?
     process.env.LAVALINK_SECURE === 'true' : 
     config.lavalink.secure;
 
-// For secure (HTTPS) connections, don't include port - Shoukaku uses default 443
-// For insecure (HTTP) connections, include the port
 const lavalinkHost = process.env.LAVALINK_HOST || config.lavalink.host;
 const lavalinkPort = process.env.LAVALINK_PORT || config.lavalink.port;
 
+// Railway requires explicit port even for HTTPS - always include port in URL
+const lavalinkUrl = `${lavalinkHost}:${lavalinkPort}`;
+
 const Nodes = [{
     name: process.env.LAVALINK_NAME || 'Mufflins-Lavalink',
-    url: isSecure ? lavalinkHost : `${lavalinkHost}:${lavalinkPort}`,
+    url: lavalinkUrl,
     auth: process.env.LAVALINK_PASSWORD || config.lavalink.password,
     secure: isSecure
 }];
 
 console.log(`🔗 Connecting to Lavalink: ${Nodes[0].url} (secure: ${Nodes[0].secure})`);
+console.log(`📋 Connection details: host=${lavalinkHost}, port=${lavalinkPort}, secure=${isSecure}`);
 
 // Initialize Kazagumo music manager
 client.manager = new Kazagumo({
