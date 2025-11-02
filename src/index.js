@@ -258,25 +258,27 @@ function formatDuration(ms) {
 
 // Safe play function - waits for voice connection before playing
 async function safePlay(player, track, options = {}) {
-  // Wait until Lavalink marks the voice session as connected
-  if (!player.connected) {
-    console.log(`[${player.guildId}] Waiting for voice connection...`);
+  // Wait until player state is connected (state 0 = Connected)
+  if (player.state !== 0) {
+    console.log(`[${player.guildId}] Waiting for voice connection (current state: ${player.state})...`);
     await new Promise((res) => {
       const timeout = setTimeout(() => {
-        console.warn(`[${player.guildId}] Voice connection timeout after 5 seconds`);
+        console.warn(`[${player.guildId}] Voice connection timeout after 5 seconds (state: ${player.state})`);
         clearInterval(interval);
         res(); // Continue anyway after timeout
       }, 5000);
       
       const interval = setInterval(() => {
-        if (player.connected) {
-          console.log(`[${player.guildId}] Voice connection established`);
+        if (player.state === 0) {
+          console.log(`[${player.guildId}] Voice connection established (state: 0)`);
           clearTimeout(timeout);
           clearInterval(interval);
           res();
         }
       }, 50);
     });
+  } else {
+    console.log(`[${player.guildId}] Voice already connected (state: 0), playing immediately`);
   }
   
   // Additional small delay to ensure voice handshake is complete
@@ -834,18 +836,18 @@ bot.on('messageCreate', async (message) => {
         setupAutoDisconnect(message.guild.id, voiceChannel.id);
         
         // Wait for voice connection to be established before proceeding
-        console.log(`[${player.guildId}] Waiting for voice connection after player creation...`);
+        console.log(`[${player.guildId}] Waiting for voice connection after player creation (state: ${player.state})...`);
         let connectionEstablished = false;
         await new Promise((resolve) => {
           const timeout = setTimeout(() => {
-            console.warn(`[${player.guildId}] Voice connection timeout after 5 seconds, proceeding anyway`);
+            console.warn(`[${player.guildId}] Voice connection timeout after 5 seconds (state: ${player.state}), proceeding anyway`);
             clearInterval(interval);
             resolve();
           }, 5000);
           
           const interval = setInterval(() => {
-            if (player.connected) {
-              console.log(`[${player.guildId}] Voice connection established`);
+            if (player.state === 0) {
+              console.log(`[${player.guildId}] Voice connection established (state: 0)`);
               connectionEstablished = true;
               clearTimeout(timeout);
               clearInterval(interval);
