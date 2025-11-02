@@ -333,7 +333,7 @@ bot.once('ready', () => {
       }
     ],
     options: {
-      defaultSearchEngine: 'youtube',
+      // Don't set defaultSearchEngine - we handle search prefixes manually
       defaultVolume: 50
     }
   });
