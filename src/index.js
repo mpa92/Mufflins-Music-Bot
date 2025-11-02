@@ -296,6 +296,15 @@ bot.once('ready', () => {
   });
   
   console.log(`[Rainlink] Rainlink initialized. Bot user ID: ${bot.user?.id || 'NOT AVAILABLE'}`);
+  
+  // Check initial node status
+  setTimeout(() => {
+    const nodes = rainlink.nodes.all();
+    console.log(`[Rainlink] Nodes available: ${nodes.length}`);
+    nodes.forEach(node => {
+      console.log(`[Rainlink] Node "${node.options?.name || 'Unknown'}": state=${node.state}, online=${node.online}`);
+    });
+  }, 1000);
 
       // Rainlink event handlers
       rainlink.on('nodeConnect', (node) => {
@@ -526,6 +535,40 @@ bot.on('messageCreate', async (message) => {
       // Get or create player
       if (!rainlink) {
         return void message.reply('❌ Rainlink is not initialized yet. Please wait a moment.');
+      }
+      
+      // Ensure Lavalink node is connected before proceeding
+      const node = rainlink.nodes.get(LAVALINK_NAME) || rainlink.nodes.all()[0];
+      if (!node) {
+        return void message.reply('❌ No Lavalink node available. Please wait a moment for connection.');
+      }
+      
+      // Check if node is connected (state 0 = Connected)
+      if (node.state !== 0 || !node.online) {
+        console.log(`[Rainlink] Node not connected yet (state: ${node.state}, online: ${node.online}), waiting...`);
+        // Wait for node to connect (max 10 seconds)
+        await new Promise((resolve) => {
+          const timeout = setTimeout(() => resolve(), 10000);
+          const checkInterval = setInterval(() => {
+            if (node.state === 0 && node.online) {
+              clearTimeout(timeout);
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 200);
+          
+          rainlink.once('nodeConnect', () => {
+            clearTimeout(timeout);
+            clearInterval(checkInterval);
+            resolve();
+          });
+        });
+        
+        // Double-check connection after wait
+        if (node.state !== 0 || !node.online) {
+          return void message.reply('❌ Unable to connect to Lavalink server. Please try again in a moment.');
+        }
+        console.log(`[Rainlink] Node connected, proceeding with play command...`);
       }
       
       // Format query for search
