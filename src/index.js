@@ -750,8 +750,13 @@ bot.on('messageCreate', async (message) => {
       let searchResult;
       try {
         console.log(`[Rainlink] Searching: "${searchQuery}"`);
+        console.log(`[Rainlink] Player.search() requester:`, message.author.id);
+        
+        // Try the search
         searchResult = await player.search(searchQuery, { requester: message.author });
+        
         console.log(`[Rainlink] Search completed. Type: ${searchResult?.type || 'unknown'}, Tracks: ${searchResult?.tracks?.length || 0}`);
+        console.log(`[Rainlink] Full search result:`, JSON.stringify(searchResult, null, 2).substring(0, 500));
       } catch (searchError) {
         console.error(`[Rainlink] Search error:`, searchError);
         await message.reactions.removeAll().catch(() => {});
