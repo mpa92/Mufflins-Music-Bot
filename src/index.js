@@ -51,9 +51,17 @@ client.manager = new Kazagumo({
     }
 }, new Connectors.DiscordJS(client), Nodes);
 
-// Manager ready event
+// Connection tracking variables
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
+// Manager ready event - handles both initial connection and reconnections
 client.manager.shoukaku.on('ready', (name) => {
     console.log(`✅ Lavalink node "${name}" connected and ready`);
+    if (reconnectAttempts > 0) {
+        console.log(`✅ Reconnection successful after ${reconnectAttempts} attempt(s)`);
+        reconnectAttempts = 0; // Reset counter on successful connection
+    }
     client.managerReady = true;
 });
 
@@ -62,11 +70,25 @@ client.manager.shoukaku.on('error', (name, error) => {
 });
 
 client.manager.shoukaku.on('close', (name, code, reason) => {
-    console.warn(`⚠️ Lavalink node "${name}" closed. Code: ${code}, Reason: ${reason}`);
+    console.warn(`⚠️ Lavalink node "${name}" closed. Code: ${code}, Reason: ${reason || 'No reason provided'}`);
+    
+    // Code 1006 = abnormal closure (often network/proxy timeout)
+    // Shoukaku should auto-reconnect, but we'll track it
+    if (code === 1006) {
+        reconnectAttempts++;
+        console.log(`🔄 WebSocket closed abnormally (1006) - Shoukaku will attempt to reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            console.error(`❌ Max reconnection attempts reached. Check Railway network configuration.`);
+        }
+    }
+    
+    client.managerReady = false;
 });
 
 client.manager.shoukaku.on('disconnect', (name, count) => {
     console.warn(`⚠️ Lavalink node "${name}" disconnected. Count: ${count}`);
+    client.managerReady = false;
 });
 
 // Initialize prefix commands collection
