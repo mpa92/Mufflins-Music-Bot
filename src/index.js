@@ -676,13 +676,24 @@ bot.on('messageCreate', async (message) => {
       }
       
       // Search for tracks
-      const searchResult = await player.search(searchQuery, {
-        requester: message.author
-      });
+      console.log(`[Rainlink] Searching with query: "${searchQuery}"`);
+      let searchResult;
+      try {
+        searchResult = await player.search(searchQuery, {
+          requester: message.author
+        });
+        console.log(`[Rainlink] Search completed. Result type: ${searchResult?.type || 'unknown'}`);
+        console.log(`[Rainlink] Has tracks: ${searchResult?.tracks ? 'yes' : 'no'}, Track count: ${searchResult?.tracks?.length || 0}`);
+      } catch (searchError) {
+        console.error(`[Rainlink] Search error:`, searchError);
+        await message.reactions.removeAll().catch(() => {});
+        return void message.reply(`Error searching: ${searchError.message || 'Unknown error'}`);
+      }
 
       await message.reactions.removeAll().catch(() => {});
       
       if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
+        console.error(`[Rainlink] No results - full result:`, JSON.stringify(searchResult, null, 2));
         return void message.reply('No results found.');
       }
       
