@@ -521,88 +521,87 @@ bot.once('ready', () => {
         console.log(`[${player.guildId}] Error classification: signIn=${isSignInError}, cipher=${isYouTubeCipherError}`);
         
         if (isSignInError) {
-            // Extract best guess query from track info
-            const info = track?.info || {};
-            const title = (info.title || track?.title || '').replace(/["""]/g, '').trim();
-            const author = (info.author || track?.author || '').replace(/["""]/g, '').trim();
-            const isrc = info.isrc || track?.info?.isrc;
-            
-            // Build base query: "artist title"
-            const qBase = author && title ? `${author} ${title}`.trim() : (title || author || 'unknown');
-            
-            console.log(`[${player.guildId}] Auto-retry: title="${title}", author="${author}", isrc="${isrc || 'none'}"`);
-            
-            // Check if this is from Spotify (which mirrors to YouTube)
-            const isSpotifyTrack = track?.sourceName === 'spotify' || track?.identifier?.includes('spotify');
-            const isYouTubeTrack = track?.identifier?.includes('youtube.com') || track?.identifier?.includes('youtu.be');
-            
-            if (isSpotifyTrack || isYouTubeTrack) {
-              // Build safe fallback queries (YT Music first, then YT)
-              const queries = [];
-              if (isrc) queries.push(`ytmsearch:"${isrc}"`);
-              if (qBase) {
-                queries.push(
-                  `ytmsearch:${qBase} audio`,
-                  `ytmsearch:${qBase} lyrics`,
-                  isrc ? `ytsearch:"${isrc}"` : null,
-                  `ytsearch:${qBase} audio`,
-                  `ytsearch:${qBase} lyrics`,
-                  `ytsearch:${qBase}`
-                );
-              }
-              
-              console.log(`[${player.guildId}] Auto-retry: Built ${queries.filter(Boolean).length} fallback queries`);
-              channel.send(`⚠️ Track requires auth - automatically searching for alternative...`).catch(() => {});
-              
-              // Execute sequential searches until one returns tracks
-              setTimeout(async () => {
-                try {
-                  const textChannel = bot.channels.cache.get(player.textId);
-                  const requester = textChannel?.lastMessage?.author || { id: bot.user.id };
-                  
-                  for (const q of queries.filter(Boolean)) {
-                    console.log(`[${player.guildId}] Auto-retry: Trying "${q}"`);
-                    try {
-                      const res = await player.search(q, { requester: requester });
-                      
-                      if (res && res.tracks && Array.isArray(res.tracks) && res.tracks.length > 0) {
-                        // Filter out Topic channels if possible
-                        const filteredTracks = res.tracks.filter(t => {
-                          const uploader = (t?.author || '').toLowerCase();
-                          const trackTitle = (t?.title || '').toLowerCase();
-                          return !uploader.includes('topic') && !trackTitle.includes('provided to youtube');
-                        });
-                        
-                        const selectedTrack = filteredTracks.length > 0 ? filteredTracks[0] : res.tracks[0];
-                        console.log(`[${player.guildId}] Auto-retry: Found alternative with "${q}": ${selectedTrack.title}`);
-                        
-                        // Replace current track instead of queuing
-                        await safePlay(player, selectedTrack);
-                        channel.send(`✅ Found alternative: **${selectedTrack.title}** - Now playing`).catch(() => {});
-                        return;
-                      }
-                    } catch (queryError) {
-                      console.log(`[${player.guildId}] Query "${q}" failed:`, queryError.message);
-                      continue;
-                    }
-                  }
-                  
-                  // Last resort message
-                  console.log(`[${player.guildId}] Auto-retry: No alternatives found after trying all queries`);
-                  channel.send(`❌ That upload seems login-gated on YouTube. I couldn't find a non-gated version. Try: \`mm!play ${qBase} -topic audio\``).catch(() => {});
-                } catch (retryError) {
-                  console.error(`[${player.guildId}] Auto-retry error:`, retryError);
-                  channel.send(`❌ Auto-retry failed. Try manually: \`mm!play ${qBase} -topic audio\``).catch(() => {});
-                }
-              }, 500);
-            } else {
-              channel.send(`❌ **Couldn't play this video**\n\nThis specific video requires authentication (some videos are age-restricted or region-locked).\n\n**Easy fix:** Search by song name to find a different upload:\n\`mm!play ${qBase}\``).catch(() => {});
+          // Extract best guess query from track info
+          const info = track?.info || {};
+          const title = (info.title || track?.title || '').replace(/["""]/g, '').trim();
+          const author = (info.author || track?.author || '').replace(/["""]/g, '').trim();
+          const isrc = info.isrc || track?.info?.isrc;
+          
+          // Build base query: "artist title"
+          const qBase = author && title ? `${author} ${title}`.trim() : (title || author || 'unknown');
+          
+          console.log(`[${player.guildId}] Auto-retry: title="${title}", author="${author}", isrc="${isrc || 'none'}"`);
+          
+          // Check if this is from Spotify (which mirrors to YouTube)
+          const isSpotifyTrack = track?.sourceName === 'spotify' || track?.identifier?.includes('spotify');
+          const isYouTubeTrack = track?.identifier?.includes('youtube.com') || track?.identifier?.includes('youtu.be');
+          
+          if (isSpotifyTrack || isYouTubeTrack) {
+            // Build safe fallback queries (YT Music first, then YT)
+            const queries = [];
+            if (isrc) queries.push(`ytmsearch:"${isrc}"`);
+            if (qBase) {
+              queries.push(
+                `ytmsearch:${qBase} audio`,
+                `ytmsearch:${qBase} lyrics`,
+                isrc ? `ytsearch:"${isrc}"` : null,
+                `ytsearch:${qBase} audio`,
+                `ytsearch:${qBase} lyrics`,
+                `ytsearch:${qBase}`
+              );
             }
-          } else if (isYouTubeCipherError) {
-            channel.send('❌ **YouTube cipher extraction failed**\n\nThis is a known issue with YouTube\'s changing script format. The track cannot be played right now.\n\n**Workaround:** Try searching by song name instead: `mm!play song name`').catch(() => {});
+            
+            console.log(`[${player.guildId}] Auto-retry: Built ${queries.filter(Boolean).length} fallback queries`);
+            channel.send(`⚠️ Track requires auth - automatically searching for alternative...`).catch(() => {});
+            
+            // Execute sequential searches until one returns tracks
+            setTimeout(async () => {
+              try {
+                const textChannel = bot.channels.cache.get(player.textId);
+                const requester = textChannel?.lastMessage?.author || { id: bot.user.id };
+                
+                for (const q of queries.filter(Boolean)) {
+                  console.log(`[${player.guildId}] Auto-retry: Trying "${q}"`);
+                  try {
+                    const res = await player.search(q, { requester: requester });
+                    
+                    if (res && res.tracks && Array.isArray(res.tracks) && res.tracks.length > 0) {
+                      // Filter out Topic channels if possible
+                      const filteredTracks = res.tracks.filter(t => {
+                        const uploader = (t?.author || '').toLowerCase();
+                        const trackTitle = (t?.title || '').toLowerCase();
+                        return !uploader.includes('topic') && !trackTitle.includes('provided to youtube');
+                      });
+                      
+                      const selectedTrack = filteredTracks.length > 0 ? filteredTracks[0] : res.tracks[0];
+                      console.log(`[${player.guildId}] Auto-retry: Found alternative with "${q}": ${selectedTrack.title}`);
+                      
+                      // Replace current track instead of queuing
+                      await safePlay(player, selectedTrack);
+                      channel.send(`✅ Found alternative: **${selectedTrack.title}** - Now playing`).catch(() => {});
+                      return;
+                    }
+                  } catch (queryError) {
+                    console.log(`[${player.guildId}] Query "${q}" failed:`, queryError.message);
+                    continue;
+                  }
+                }
+                
+                // Last resort message
+                console.log(`[${player.guildId}] Auto-retry: No alternatives found after trying all queries`);
+                channel.send(`❌ That upload seems login-gated on YouTube. I couldn't find a non-gated version. Try: \`mm!play ${qBase} -topic audio\``).catch(() => {});
+              } catch (retryError) {
+                console.error(`[${player.guildId}] Auto-retry error:`, retryError);
+                channel.send(`❌ Auto-retry failed. Try manually: \`mm!play ${qBase} -topic audio\``).catch(() => {});
+              }
+            }, 500);
           } else {
-            channel.send(`❌ **Playback failed**: ${errorMsg}`).catch(() => {});
+            channel.send(`❌ **Couldn't play this video**\n\nThis specific video requires authentication (some videos are age-restricted or region-locked).\n\n**Easy fix:** Search by song name to find a different upload:\n\`mm!play ${qBase}\``).catch(() => {});
           }
+        } else if (isYouTubeCipherError) {
+          channel.send('❌ **YouTube cipher extraction failed**\n\nThis is a known issue with YouTube\'s changing script format. The track cannot be played right now.\n\n**Workaround:** Try searching by song name instead: `mm!play song name`').catch(() => {});
+        } else {
+          channel.send(`❌ **Playback failed**: ${errorMsg}`).catch(() => {});
         }
         
         // Skip to next track if available
