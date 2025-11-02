@@ -654,8 +654,8 @@ bot.on('messageCreate', async (message) => {
     if (SPOTIFY_TRACK_RE.test(query) || SPOTIFY_ALBUM_RE.test(query)) {
       const spotifyTitle = await resolveSpotifyToYouTube(query);
       if (spotifyTitle) {
-        query = `ytmsearch:${spotifyTitle}`;
-        console.log(`[Spotify] Converted to YouTube Music search: "${query}"`);
+        query = `ytsearch:${spotifyTitle} audio`;
+        console.log(`[Spotify] Converted to YouTube search: "${query}"`);
       } else {
         return void message.reply('❌ Failed to resolve Spotify URL. Try searching by song name instead.');
       }
