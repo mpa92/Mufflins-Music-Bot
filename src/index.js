@@ -70,17 +70,21 @@ client.manager.shoukaku.on('error', (name, error) => {
 });
 
 client.manager.shoukaku.on('close', (name, code, reason) => {
-    console.warn(`⚠️ Lavalink node "${name}" closed. Code: ${code}, Reason: ${reason || 'No reason provided'}`);
-    
-    // Code 1006 = abnormal closure (often network/proxy timeout)
-    // Shoukaku should auto-reconnect, but we'll track it
+    // Code 1006 is common on Railway due to proxy timeouts - this is expected behavior
+    // Shoukaku auto-reconnects, so these warnings are informational only
     if (code === 1006) {
         reconnectAttempts++;
-        console.log(`🔄 WebSocket closed abnormally (1006) - Shoukaku will attempt to reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-        
-        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            console.error(`❌ Max reconnection attempts reached. Check Railway network configuration.`);
+        // Only log every 5th disconnection to reduce log noise (unless it's a critical count)
+        if (reconnectAttempts % 5 === 0 || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            console.warn(`⚠️ Lavalink node "${name}" closed (1006) - Railway proxy timeout. Auto-reconnecting... (${reconnectAttempts} total)`);
+            
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                console.error(`❌ Frequent disconnections detected (${reconnectAttempts}). This is common on Railway. Bot will continue to reconnect.`);
+            }
         }
+    } else {
+        // Log other close codes (not 1006) with full details
+        console.warn(`⚠️ Lavalink node "${name}" closed. Code: ${code}, Reason: ${reason || 'No reason provided'}`);
     }
     
     client.managerReady = false;
