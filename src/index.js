@@ -27,7 +27,10 @@ const Nodes = [{
         `${process.env.LAVALINK_HOST}:${process.env.LAVALINK_PORT || 443}` : 
         `${config.lavalink.host}:${config.lavalink.port}`,
     auth: process.env.LAVALINK_PASSWORD || config.lavalink.password,
-    secure: process.env.LAVALINK_SECURE === 'true' || (process.env.LAVALINK_HOST ? false : config.lavalink.secure)
+    // Fix secure logic: check env var first, then fallback to config
+    secure: process.env.LAVALINK_SECURE !== undefined ? 
+        process.env.LAVALINK_SECURE === 'true' : 
+        config.lavalink.secure
 }];
 
 console.log(`🔗 Connecting to Lavalink: ${Nodes[0].url} (secure: ${Nodes[0].secure})`);
