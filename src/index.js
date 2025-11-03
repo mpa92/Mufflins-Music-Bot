@@ -376,29 +376,12 @@ client.manager.on('playerException', (player, track, error) => {
         }
     }
     
-    // Try to skip to next track if available
-    // IMPORTANT: Only skip if queue actually has tracks (prevent accidental queue clearing)
-    if (player.queue.size > 0 && player.queue.current) {
-        setTimeout(async () => {
-            // Double-check queue still has tracks before trying to play
-            if (player.queue.size > 0 && !player.playing && player.queue.current) {
-                try {
-                    await player.play();
-                    console.log(`[${player.guildId}] Successfully played next track after exception`);
-                } catch (err) {
-                    console.error(`[${player.guildId}] Error playing next track after exception:`, err.message);
-                    // If play fails, try skip instead but ONLY if queue has more tracks
-                    if (player.queue.size > 1) {
-                        console.log(`[${player.guildId}] Attempting to skip to next track (${player.queue.size - 1} remaining)`);
-                        player.skip();
-                    } else {
-                        console.warn(`[${player.guildId}] Cannot skip - only 1 track remaining and play failed`);
-                    }
-                }
-            }
-        }, 1000);
+    // Kazagumo will automatically try to play the next track
+    // We just log the queue status here
+    if (player.queue.size > 0) {
+        console.log(`[${player.guildId}] ⏭️  Queue has ${player.queue.size} tracks - Kazagumo will auto-play next track`);
     } else {
-        console.warn(`[${player.guildId}] Track exception - queue is empty or no current track`);
+        console.warn(`[${player.guildId}] ⚠️  Track exception - queue is empty`);
     }
 });
 

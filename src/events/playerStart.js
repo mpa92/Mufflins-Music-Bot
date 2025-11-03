@@ -18,7 +18,8 @@ module.exports = async (client, player, track) => {
     const channel = client.channels.cache.get(player.textId);
     if (!channel) return;
 
-    console.log(`[${player.guildId}] Now playing: ${track.title}`);
+    console.log(`[${player.guildId}] ▶️  Now playing: "${track.title}" by ${track.author}`);
+    console.log(`[${player.guildId}] Track info: ${Math.floor(track.length / 1000)}s, URI: ${track.uri}`);
 
     // Get YouTube thumbnail
     let thumbnail = null;
