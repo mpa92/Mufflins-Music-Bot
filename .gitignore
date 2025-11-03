@@ -3,8 +3,10 @@ node_modules/
 .DS_Store
 *.log
 
-# Lavalink server (deployed in separate repository)
-lavalink-server/
+# Lavalink server files (track config, ignore binaries)
+lavalink-server/*.jar
+lavalink-server/logs/
+lavalink-server/plugins/*.jar
 
 # OS files
 Thumbs.db
