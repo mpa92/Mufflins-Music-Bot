@@ -166,13 +166,24 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// Track start times for detecting instant failures
+const trackStartTimes = new Map(); // guildId -> { track, startTime, hasRetried }
+
 // Kazagumo player events
 client.manager.on('playerStart', (player, track) => {
+    // Record when track started
+    trackStartTimes.set(player.guildId, {
+        track: track,
+        startTime: Date.now(),
+        hasRetried: false
+    });
+    
     const playerStartEvent = require('./events/playerStart');
     playerStartEvent(client, player, track);
 });
 
 client.manager.on('playerEmpty', (player) => {
+    trackStartTimes.delete(player.guildId);
     const playerEmptyEvent = require('./events/playerEmpty');
     playerEmptyEvent(client, player);
 });
@@ -180,6 +191,78 @@ client.manager.on('playerEmpty', (player) => {
 client.manager.on('playerEnd', (player) => {
     const playerEndEvent = require('./events/playerEnd');
     playerEndEvent(client, player);
+    
+    // Check if track ended too quickly (within 5 seconds) - indicates stream failure
+    const trackInfo = trackStartTimes.get(player.guildId);
+    if (trackInfo && !trackInfo.hasRetried) {
+        const playDuration = Date.now() - trackInfo.startTime;
+        const track = trackInfo.track;
+        
+        // If track ended in less than 5 seconds but should have been longer
+        if (playDuration < 5000 && track.length > 10000) {
+            console.warn(`[${player.guildId}] ⚠️  Track ended suspiciously fast (${playDuration}ms / expected ${track.length}ms)`);
+            
+            // If it's a Spotify track, retry with YouTube search
+            if (track.uri && track.uri.includes('spotify.com')) {
+                const channel = client.channels.cache.get(player.textId);
+                if (channel) {
+                    console.log(`[${player.guildId}] 🔄 Auto-retrying with YouTube search...`);
+                    
+                    const { EmbedBuilder } = require('discord.js');
+                    channel.send({
+                        embeds: [new EmbedBuilder()
+                            .setColor(0x8e7cc3)
+                            .setDescription(`\`⚠️\` | **Spotify stream failed, retrying with YouTube...**\n\nTrack: ${track.author} - ${track.title}`)
+                        ]
+                    }).catch(() => {});
+                    
+                    // Mark as retried to prevent infinite loop
+                    trackInfo.hasRetried = true;
+                    
+                    // Search YouTube and play
+                    setTimeout(async () => {
+                        try {
+                            const searchQuery = `${track.author} ${track.title}`;
+                            const result = await player.search(`ytsearch:${searchQuery}`, { requester: track.requester });
+                            
+                            if (result.tracks.length > 0) {
+                                const ytTrack = result.tracks[0];
+                                ytTrack.requester = track.requester;
+                                player.queue.unshift(ytTrack); // Add to front of queue
+                                
+                                if (!player.playing) {
+                                    await player.play();
+                                }
+                                
+                                console.log(`[${player.guildId}] ✅ Retrying with YouTube: ${ytTrack.title}`);
+                                channel.send({
+                                    embeds: [new EmbedBuilder()
+                                        .setColor(0x8e7cc3)
+                                        .setDescription(`\`✅\` | **Now playing from YouTube:** ${ytTrack.title}`)
+                                    ]
+                                }).catch(() => {});
+                            } else {
+                                console.error(`[${player.guildId}] ❌ YouTube search failed for: ${searchQuery}`);
+                                channel.send({
+                                    embeds: [new EmbedBuilder()
+                                        .setColor(0x8e7cc3)
+                                        .setDescription(`\`❌\` | **Failed to find track on YouTube**\n\nTry: \`mm!play ${searchQuery}\``)
+                                    ]
+                                }).catch(() => {});
+                            }
+                        } catch (err) {
+                            console.error(`[${player.guildId}] ❌ Retry error:`, err);
+                        }
+                    }, 500);
+                }
+            }
+        }
+    }
+    
+    // Clean up after a delay
+    setTimeout(() => {
+        trackStartTimes.delete(player.guildId);
+    }, 10000);
 });
 
 // Track position tracking to detect truly stuck tracks
