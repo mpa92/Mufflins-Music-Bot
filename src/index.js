@@ -199,12 +199,13 @@ client.manager.on('playerEnd', (player) => {
         const track = trackInfo.track;
         
         // Always log the duration for debugging
-        console.log(`[${player.guildId}] 📊 Track play duration: ${playDuration}ms (expected: ${track.length}ms, ${Math.floor((playDuration / track.length) * 100)}%)`);
-        
-        // If track ended in less than 10% of its duration - likely a stream failure
         const percentagePlayed = (playDuration / track.length) * 100;
-        if (percentagePlayed < 10 && track.length > 10000) {
-            console.warn(`[${player.guildId}] ⚠️  Track ended suspiciously fast (${playDuration}ms / expected ${track.length}ms, only ${percentagePlayed.toFixed(1)}% played)`);
+        console.log(`[${player.guildId}] 📊 Track play duration: ${playDuration}ms (expected: ${track.length}ms, ${percentagePlayed.toFixed(1)}%)`);
+        
+        // If track ended before completing 90% - likely a stream failure or timeout
+        // This catches both instant failures AND tracks that stop mid-playback
+        if (percentagePlayed < 90 && track.length > 10000) {
+            console.warn(`[${player.guildId}] ⚠️  Track ended prematurely (${playDuration}ms / expected ${track.length}ms, only ${percentagePlayed.toFixed(1)}% played)`);
             
             // If it's a Spotify track, retry with YouTube search
             if (track.uri && track.uri.includes('spotify.com')) {
