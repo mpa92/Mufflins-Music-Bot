@@ -1,20 +1,13 @@
 module.exports = async (client, player) => {
-    console.log(`[${player.guildId}] Track ended`);
+    const currentTrack = player.queue.previous;
+    console.log(`[${player.guildId}] Track ended${currentTrack ? `: "${currentTrack.title}"` : ''} (queue size: ${player.queue.size})`);
     
-    // Ensure next track plays automatically if queue has tracks
-    // Kazagumo should handle this, but we'll ensure it happens
-    if (player.queue.size > 0 && !player.playing && !player.paused) {
-        setTimeout(async () => {
-            try {
-                // Double-check conditions before playing
-                if (player.queue.size > 0 && !player.playing && !player.paused) {
-                    console.log(`[${player.guildId}] Auto-playing next track from queue (${player.queue.size} tracks remaining)`);
-                    await player.play();
-                }
-            } catch (err) {
-                console.error(`[${player.guildId}] Error auto-playing next track:`, err?.message || err);
-            }
-        }, 500); // Small delay to ensure track is fully ended
+    // Kazagumo automatically handles playing the next track in queue
+    // We just log the status here - no manual intervention needed
+    if (player.queue.size > 0) {
+        console.log(`[${player.guildId}] Next track will auto-play (${player.queue.size} tracks remaining)`);
+    } else {
+        console.log(`[${player.guildId}] Queue is now empty${player.data.get("autoplay") ? ' (autoplay will trigger)' : ''}`);
     }
 };
 

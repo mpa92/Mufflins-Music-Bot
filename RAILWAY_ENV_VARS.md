@@ -4,24 +4,20 @@ Copy these environment variables to your Railway bot service:
 
 ## 🔑 Required Variables
 
+**⚠️ IMPORTANT: Use Public Domain for WebSocket connections**
+
+Internal networking in Railway can cause 404 errors with WebSocket connections. Use the public domain instead:
+
 ```
 TOKEN=your_discord_bot_token_here
-LAVALINK_HOST=your-lavalink-service.up.railway.app
+LAVALINK_HOST=lavalink-server-production-7beb.up.railway.app
 LAVALINK_PORT=443
 LAVALINK_PASSWORD=youshallnotpass
 LAVALINK_SECURE=true
 LAVALINK_NAME=railway-lavalink
 ```
 
-**OR if using internal networking (same Railway project - faster):**
-```
-TOKEN=your_discord_bot_token_here
-LAVALINK_HOST=lavalink
-LAVALINK_PORT=2333
-LAVALINK_PASSWORD=youshallnotpass
-LAVALINK_SECURE=false
-LAVALINK_NAME=railway-lavalink
-```
+**Note:** Railway's internal networking may not properly handle WebSocket upgrades, causing 404 errors. The public domain (HTTPS on port 443) is recommended for reliable WebSocket connections.
 
 ## 🎵 Optional Variables (for better Spotify support)
 
