@@ -228,7 +228,7 @@ client.manager.on('playerEnd', (player) => {
                     setTimeout(async () => {
                         try {
                             const searchQuery = `${track.author} ${track.title}`;
-                            const result = await player.search(`ytsearch:${searchQuery}`, { requester: track.requester });
+                            const result = await player.search(searchQuery, { requester: track.requester });
                             
                             if (result.tracks.length > 0) {
                                 const ytTrack = result.tracks[0];
