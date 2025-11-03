@@ -192,15 +192,19 @@ client.manager.on('playerEnd', (player) => {
     const playerEndEvent = require('./events/playerEnd');
     playerEndEvent(client, player);
     
-    // Check if track ended too quickly (within 5 seconds) - indicates stream failure
+    // Check if track ended too quickly - indicates stream failure
     const trackInfo = trackStartTimes.get(player.guildId);
     if (trackInfo && !trackInfo.hasRetried) {
         const playDuration = Date.now() - trackInfo.startTime;
         const track = trackInfo.track;
         
-        // If track ended in less than 5 seconds but should have been longer
-        if (playDuration < 5000 && track.length > 10000) {
-            console.warn(`[${player.guildId}] ⚠️  Track ended suspiciously fast (${playDuration}ms / expected ${track.length}ms)`);
+        // Always log the duration for debugging
+        console.log(`[${player.guildId}] 📊 Track play duration: ${playDuration}ms (expected: ${track.length}ms, ${Math.floor((playDuration / track.length) * 100)}%)`);
+        
+        // If track ended in less than 10% of its duration - likely a stream failure
+        const percentagePlayed = (playDuration / track.length) * 100;
+        if (percentagePlayed < 10 && track.length > 10000) {
+            console.warn(`[${player.guildId}] ⚠️  Track ended suspiciously fast (${playDuration}ms / expected ${track.length}ms, only ${percentagePlayed.toFixed(1)}% played)`);
             
             // If it's a Spotify track, retry with YouTube search
             if (track.uri && track.uri.includes('spotify.com')) {
