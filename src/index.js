@@ -182,32 +182,104 @@ client.manager.on('playerEnd', (player) => {
     playerEndEvent(client, player);
 });
 
-// Periodic check for stuck tracks (every 60 seconds)
-// Only runs after bot is ready to avoid startup issues
+// Track position tracking to detect truly stuck tracks
+const playerPositions = new Map(); // guildId -> { lastPosition, lastCheck, stuckCount }
+
+// Periodic check for stuck tracks (every 30 seconds - less aggressive)
+// Only intervenes if track position hasn't changed, indicating it's truly stuck
 setInterval(() => {
     if (!client.managerReady) return;
 
     client.manager.players.forEach(async (player) => {
-        // Check if player should be playing but isn't (not paused, queue has tracks, current track exists)
-        if (player && !player.paused && !player.playing && player.queue.size > 0 && player.queue.current) {
-            console.warn(`[${player.guildId}] Track may have stopped unexpectedly - attempting recovery`);
-            // Try to resume playback
-            try {
-                await player.play();
-                console.log(`[${player.guildId}] Successfully resumed playback`);
-            } catch (err) {
-                console.error(`[${player.guildId}] Resume failed:`, err?.message || err);
-                // Only skip if queue has multiple tracks (don't skip if it's the last one)
-                if (player.queue.size > 1) {
-                    console.log(`[${player.guildId}] Skipping to next track (${player.queue.size - 1} remaining)`);
-                player.skip();
-                } else {
-                    console.warn(`[${player.guildId}] Cannot skip - only ${player.queue.size} track(s) remaining`);
-                }
+        if (!player || !player.queue.current) return;
+        
+        // Skip if paused or explicitly stopped
+        if (player.paused) {
+            playerPositions.delete(player.guildId);
+            return;
+        }
+        
+        // Check if we have a current track and it should be playing
+        const currentTrack = player.queue.current;
+        const currentPosition = player.position || 0;
+        const trackLength = currentTrack.length || 0;
+        const isTrackEnded = trackLength > 0 && currentPosition >= trackLength - 2000; // Within 2 seconds of end
+        
+        // If track is near the end, it's finishing normally - don't intervene
+        if (isTrackEnded) {
+            playerPositions.delete(player.guildId);
+            return;
+        }
+        
+        // Get last known position
+        const lastCheck = playerPositions.get(player.guildId);
+        const now = Date.now();
+        
+        // If player.playing is true, track is playing - update position and continue
+        if (player.playing && currentPosition > 0) {
+            playerPositions.set(player.guildId, {
+                lastPosition: currentPosition,
+                lastCheck: now,
+                stuckCount: 0
+            });
+            return; // Track is playing fine
+        }
+        
+        // Track is NOT playing according to player.playing
+        // Check if position has changed since last check (indicates it might actually be playing despite player.playing being false)
+        if (lastCheck) {
+            const timeSinceLastCheck = now - lastCheck.lastCheck;
+            const positionChanged = Math.abs(currentPosition - lastCheck.lastPosition) > 1000; // Position changed by more than 1 second
+            
+            // If position changed, track is actually playing (Railway sync issue) - update and continue
+            if (positionChanged && timeSinceLastCheck > 15000) { // Only check if > 15 seconds passed
+                playerPositions.set(player.guildId, {
+                    lastPosition: currentPosition,
+                    lastCheck: now,
+                    stuckCount: 0
+                });
+                return; // Position is advancing, track is fine
             }
+            
+            // Position hasn't changed - track might be stuck
+            const newStuckCount = lastCheck.stuckCount + 1;
+            
+            // Only intervene if stuck for multiple checks (at least 2 checks = ~60 seconds)
+            if (newStuckCount >= 2 && timeSinceLastCheck > 30000) {
+                console.warn(`[${player.guildId}] Track "${currentTrack.title}" appears stuck (position: ${Math.floor(currentPosition/1000)}s, stuck for ${Math.floor(timeSinceLastCheck/1000)}s) - attempting recovery`);
+                
+                try {
+                    await player.play();
+                    console.log(`[${player.guildId}] ✅ Successfully resumed playback`);
+                    playerPositions.delete(player.guildId);
+                } catch (err) {
+                    console.error(`[${player.guildId}] ❌ Resume failed:`, err?.message || err);
+                    playerPositions.set(player.guildId, {
+                        lastPosition: currentPosition,
+                        lastCheck: now,
+                        stuckCount: newStuckCount
+                    });
+                }
+                return;
+            } else {
+                // Update stuck count but don't intervene yet
+                playerPositions.set(player.guildId, {
+                    lastPosition: currentPosition,
+                    lastCheck: now,
+                    stuckCount: newStuckCount
+                });
+                return;
+            }
+        } else {
+            // First check - record position and wait for next check
+            playerPositions.set(player.guildId, {
+                lastPosition: currentPosition,
+                lastCheck: now,
+                stuckCount: 0
+            });
         }
     });
-}, 60000); // Check every 60 seconds
+}, 30000); // Check every 30 seconds (less aggressive)
 
 // Handle player errors/exceptions
 client.manager.shoukaku.on('error', (name, error) => {
