@@ -115,6 +115,8 @@ const prefixCommandFolders = fs.readdirSync("./src/prefix");
     // Wait for client to be ready before handling commands
     client.once('ready', () => {
         console.log(`✅ Bot is online as ${client.user.tag}`);
+        console.log(`🆔 Bot Client ID: ${client.user.id}`);
+        console.log(`🔗 Invite Link: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=36703232&scope=bot%20applications.commands`);
         console.log(`🎵 Serving ${client.guilds.cache.size} guilds`);
         console.log(`🎮 Prefix: mm!`);
         client.handlePrefixCommands(prefixCommandFolders, "./src/prefix");
@@ -169,6 +171,72 @@ client.on('messageCreate', async (message) => {
 // Track start times for detecting instant failures
 const trackStartTimes = new Map(); // guildId -> { track, startTime, hasRetried }
 
+// Auto-disconnect timers - tracks inactivity timers per guild
+const autoDisconnectTimers = new Map(); // guildId -> timeout
+
+// Function to clear auto-disconnect timer for a guild
+function clearAutoDisconnectTimer(guildId) {
+    const timer = autoDisconnectTimers.get(guildId);
+    if (timer) {
+        clearTimeout(timer);
+        autoDisconnectTimers.delete(guildId);
+    }
+}
+
+// Make functions accessible to commands
+client.clearAutoDisconnectTimer = clearAutoDisconnectTimer;
+
+// Function to start auto-disconnect timer (5 minutes of inactivity)
+function startAutoDisconnectTimer(guildId) {
+    // Clear any existing timer first
+    clearAutoDisconnectTimer(guildId);
+    
+    // Start new 5-minute timer
+    const timer = setTimeout(async () => {
+        try {
+            const player = client.manager.players.get(guildId);
+            if (!player) {
+                autoDisconnectTimers.delete(guildId);
+                return;
+            }
+            
+            // Check if music is actually playing
+            if (player.playing || player.paused) {
+                // Music is playing/paused, don't disconnect - restart timer
+                startAutoDisconnectTimer(guildId);
+                return;
+            }
+            
+            // Check if there are tracks in queue
+            if (player.queue.size > 0) {
+                // Queue has tracks, don't disconnect - restart timer
+                startAutoDisconnectTimer(guildId);
+                return;
+            }
+            
+            // No music playing and no queue - disconnect
+            const channel = client.channels.cache.get(player.textId);
+            if (channel) {
+                const embed = new EmbedBuilder()
+                    .setColor(0x8e7cc3)
+                    .setDescription('No tracks have been playing for the past 5 minutes, leaving :wave:');
+                
+                await channel.send({ embeds: [embed] }).catch(() => {});
+            }
+            
+            // Disconnect the player
+            await player.destroy();
+            autoDisconnectTimers.delete(guildId);
+            
+            console.log(`[${guildId}] Auto-disconnected after 5 minutes of inactivity`);
+        } catch (error) {
+            console.error(`[${guildId}] Error during auto-disconnect:`, error);
+            autoDisconnectTimers.delete(guildId);
+        }
+    }, 5 * 60 * 1000); // 5 minutes in milliseconds
+    
+    autoDisconnectTimers.set(guildId, timer);
+}
 // Kazagumo player events
 client.manager.on('playerStart', (player, track) => {
     // Record when track started
@@ -178,12 +246,25 @@ client.manager.on('playerStart', (player, track) => {
         hasRetried: false
     });
     
+    // Clear auto-disconnect timer when music starts
+    clearAutoDisconnectTimer(player.guildId);
+    
     const playerStartEvent = require('./events/playerStart');
     playerStartEvent(client, player, track);
 });
 
 client.manager.on('playerEmpty', (player) => {
     trackStartTimes.delete(player.guildId);
+    
+    // Start auto-disconnect timer when queue becomes empty
+    // Only if not playing and no autoplay
+    if (!player.playing && !player.paused) {
+        const autoplayEnabled = player.data.get("autoplay");
+        if (!autoplayEnabled) {
+            startAutoDisconnectTimer(player.guildId);
+        }
+    }
+    
     const playerEmptyEvent = require('./events/playerEmpty');
     playerEmptyEvent(client, player);
 });
@@ -191,6 +272,15 @@ client.manager.on('playerEmpty', (player) => {
 client.manager.on('playerEnd', (player) => {
     const playerEndEvent = require('./events/playerEnd');
     playerEndEvent(client, player);
+    
+    // Check if we should start auto-disconnect timer
+    // Only if queue is empty, not playing, and no autoplay
+    if (player.queue.size === 0 && !player.playing && !player.paused) {
+        const autoplayEnabled = player.data.get("autoplay");
+        if (!autoplayEnabled) {
+            startAutoDisconnectTimer(player.guildId);
+        }
+    }
     
     // Check if track ended too quickly - indicates stream failure
     const trackInfo = trackStartTimes.get(player.guildId);
@@ -471,6 +561,14 @@ client.manager.on('playerException', (player, track, error) => {
     } else {
         console.warn(`[${player.guildId}] ⚠️  Track exception - queue is empty`);
     }
+});
+
+// Listen for player destruction (when player.destroy() is called)
+// This happens when user uses leave/stop commands or bot disconnects
+client.manager.on('playerDestroy', (player) => {
+    // Clear auto-disconnect timer when player is manually destroyed
+    clearAutoDisconnectTimer(player.guildId);
+    console.log(`[${player.guildId}] Player destroyed - cleared auto-disconnect timer`);
 });
 
 // Error handling

@@ -32,7 +32,11 @@ module.exports = {
                 ]
             });
         }
-
+                // Clear auto-disconnect timer before destroying
+        if (client.clearAutoDisconnectTimer) {
+            client.clearAutoDisconnectTimer(message.guild.id);
+        }
+        
         player.destroy();
 
         const embed = new EmbedBuilder()
