@@ -42,6 +42,13 @@ module.exports = {
             deaf: true
         });
 
+        // Start auto-disconnect timer if not playing anything
+        if (!player.playing && !player.paused && player.queue.size === 0) {
+            if (client.startAutoDisconnectTimer) {
+                client.startAutoDisconnectTimer(interaction.guild.id);
+            }
+        }
+
         const embed = new EmbedBuilder()
             .setColor(0x8e7cc3)
             .setTitle('Joined')

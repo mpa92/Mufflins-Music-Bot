@@ -76,6 +76,13 @@ module.exports = {
                 deaf: true
             });
 
+            // Start auto-disconnect timer if not playing anything
+            if (!player.playing && !player.paused && player.queue.size === 0) {
+                if (client.startAutoDisconnectTimer) {
+                    client.startAutoDisconnectTimer(message.guild.id);
+                }
+            }
+
             const embed = new EmbedBuilder()
                 .setColor(0x8e7cc3)
                 .setDescription(`\`🎵\` | **Joined ${channel.name}!**`)

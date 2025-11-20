@@ -172,31 +172,70 @@ client.on('messageCreate', async (message) => {
 const trackStartTimes = new Map(); // guildId -> { track, startTime, hasRetried }
 
 // Auto-disconnect timers - tracks inactivity timers per guild
-const autoDisconnectTimers = new Map(); // guildId -> timeout
+const autoDisconnectTimers = new Map(); // guildId -> { timeout, interval, startTime }
+const IDLE_DISCONNECT_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Function to clear auto-disconnect timer for a guild
 function clearAutoDisconnectTimer(guildId) {
-    const timer = autoDisconnectTimers.get(guildId);
-    if (timer) {
-        clearTimeout(timer);
+    const timerData = autoDisconnectTimers.get(guildId);
+    if (timerData) {
+        if (timerData.timeout) {
+            clearTimeout(timerData.timeout);
+        }
+        if (timerData.interval) {
+            clearInterval(timerData.interval);
+        }
         autoDisconnectTimers.delete(guildId);
     }
 }
 
 // Make functions accessible to commands
 client.clearAutoDisconnectTimer = clearAutoDisconnectTimer;
+client.startAutoDisconnectTimer = startAutoDisconnectTimer;
 
 // Function to start auto-disconnect timer (5 minutes of inactivity)
 function startAutoDisconnectTimer(guildId) {
     // Clear any existing timer first
     clearAutoDisconnectTimer(guildId);
     
+    const startTime = Date.now();
+    let lastDisplayedSeconds = -1;
+    
+    // Start countdown interval (update every second)
+    const interval = setInterval(() => {
+        const player = client.manager.players.get(guildId);
+        if (!player) {
+            clearAutoDisconnectTimer(guildId);
+            return;
+        }
+        
+        // Check if music is playing or paused - if so, stop countdown
+        if (player.playing || player.paused || player.queue.size > 0) {
+            clearAutoDisconnectTimer(guildId);
+            return;
+        }
+        
+        const elapsed = Date.now() - startTime;
+        const remaining = IDLE_DISCONNECT_TIME - elapsed;
+        const remainingSeconds = Math.ceil(remaining / 1000);
+        
+        // Only log when seconds change to avoid spam
+        if (remainingSeconds !== lastDisplayedSeconds && remainingSeconds > 0) {
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            const guild = client.guilds.cache.get(guildId);
+            const guildName = guild ? guild.name : guildId;
+            console.log(`[${guildName}] ⏱️  Auto-disconnect countdown: ${minutes}:${seconds.toString().padStart(2, '0')} remaining (not playing)`);
+            lastDisplayedSeconds = remainingSeconds;
+        }
+    }, 1000); // Update every second
+    
     // Start new 5-minute timer
-    const timer = setTimeout(async () => {
+    const timeout = setTimeout(async () => {
         try {
             const player = client.manager.players.get(guildId);
             if (!player) {
-                autoDisconnectTimers.delete(guildId);
+                clearAutoDisconnectTimer(guildId);
                 return;
             }
             
@@ -214,6 +253,9 @@ function startAutoDisconnectTimer(guildId) {
                 return;
             }
             
+            // Clear the interval before disconnecting
+            clearAutoDisconnectTimer(guildId);
+            
             // No music playing and no queue - disconnect
             const channel = client.channels.cache.get(player.textId);
             if (channel) {
@@ -226,16 +268,22 @@ function startAutoDisconnectTimer(guildId) {
             
             // Disconnect the player
             await player.destroy();
-            autoDisconnectTimers.delete(guildId);
             
-            console.log(`[${guildId}] Auto-disconnected after 5 minutes of inactivity`);
+            const guild = client.guilds.cache.get(guildId);
+            const guildName = guild ? guild.name : guildId;
+            console.log(`[${guildName}] ✅ Auto-disconnected after 5 minutes of inactivity`);
         } catch (error) {
             console.error(`[${guildId}] Error during auto-disconnect:`, error);
-            autoDisconnectTimers.delete(guildId);
+            clearAutoDisconnectTimer(guildId);
         }
-    }, 5 * 60 * 1000); // 5 minutes in milliseconds
+    }, IDLE_DISCONNECT_TIME);
     
-    autoDisconnectTimers.set(guildId, timer);
+    autoDisconnectTimers.set(guildId, { timeout, interval, startTime });
+    
+    // Log initial countdown start
+    const guild = client.guilds.cache.get(guildId);
+    const guildName = guild ? guild.name : guildId;
+    console.log(`[${guildName}] ⏱️  Auto-disconnect countdown started: 5:00 remaining (not playing)`);
 }
 // Kazagumo player events
 client.manager.on('playerStart', (player, track) => {
