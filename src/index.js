@@ -173,7 +173,7 @@ const trackStartTimes = new Map(); // guildId -> { track, startTime, hasRetried 
 
 // Auto-disconnect timers - tracks inactivity timers per guild
 const autoDisconnectTimers = new Map(); // guildId -> { timeout, interval, startTime }
-const IDLE_DISCONNECT_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
+const IDLE_DISCONNECT_TIME = 2.5 * 60 * 1000; // 2 minutes 30 seconds in milliseconds
 
 // Function to clear auto-disconnect timer for a guild
 function clearAutoDisconnectTimer(guildId) {
@@ -193,15 +193,15 @@ function clearAutoDisconnectTimer(guildId) {
 client.clearAutoDisconnectTimer = clearAutoDisconnectTimer;
 client.startAutoDisconnectTimer = startAutoDisconnectTimer;
 
-// Function to start auto-disconnect timer (5 minutes of inactivity)
+// Function to start auto-disconnect timer (2 minutes 30 seconds of inactivity)
 function startAutoDisconnectTimer(guildId) {
     // Clear any existing timer first
     clearAutoDisconnectTimer(guildId);
     
     const startTime = Date.now();
-    let lastDisplayedSeconds = -1;
+    let lastDisplayedTime = -1;
     
-    // Start countdown interval (update every second)
+    // Start countdown interval (update every 30 seconds)
     const interval = setInterval(() => {
         const player = client.manager.players.get(guildId);
         if (!player) {
@@ -219,18 +219,19 @@ function startAutoDisconnectTimer(guildId) {
         const remaining = IDLE_DISCONNECT_TIME - elapsed;
         const remainingSeconds = Math.ceil(remaining / 1000);
         
-        // Only log when seconds change to avoid spam
-        if (remainingSeconds !== lastDisplayedSeconds && remainingSeconds > 0) {
+        // Only log every 30 seconds to avoid spam
+        const displayTime = Math.floor(remainingSeconds / 30) * 30;
+        if (displayTime !== lastDisplayedTime && remainingSeconds > 0) {
             const minutes = Math.floor(remainingSeconds / 60);
             const seconds = remainingSeconds % 60;
             const guild = client.guilds.cache.get(guildId);
             const guildName = guild ? guild.name : guildId;
             console.log(`[${guildName}] ⏱️  Auto-disconnect countdown: ${minutes}:${seconds.toString().padStart(2, '0')} remaining (not playing)`);
-            lastDisplayedSeconds = remainingSeconds;
+            lastDisplayedTime = displayTime;
         }
-    }, 1000); // Update every second
+    }, 30000); // Update every 30 seconds
     
-    // Start new 5-minute timer
+    // Start new 2 minute 30 second timer
     const timeout = setTimeout(async () => {
         try {
             const player = client.manager.players.get(guildId);
@@ -261,7 +262,7 @@ function startAutoDisconnectTimer(guildId) {
             if (channel) {
                 const embed = new EmbedBuilder()
                     .setColor(0x8e7cc3)
-                    .setDescription('No tracks have been playing for the past 5 minutes, leaving :wave:');
+                    .setDescription('No tracks have been playing for the past 2 minutes 30 seconds, leaving :wave:');
                 
                 await channel.send({ embeds: [embed] }).catch(() => {});
             }
@@ -271,7 +272,7 @@ function startAutoDisconnectTimer(guildId) {
             
             const guild = client.guilds.cache.get(guildId);
             const guildName = guild ? guild.name : guildId;
-            console.log(`[${guildName}] ✅ Auto-disconnected after 5 minutes of inactivity`);
+            console.log(`[${guildName}] ✅ Auto-disconnected after 2 minutes 30 seconds of inactivity`);
         } catch (error) {
             console.error(`[${guildId}] Error during auto-disconnect:`, error);
             clearAutoDisconnectTimer(guildId);
@@ -283,7 +284,7 @@ function startAutoDisconnectTimer(guildId) {
     // Log initial countdown start
     const guild = client.guilds.cache.get(guildId);
     const guildName = guild ? guild.name : guildId;
-    console.log(`[${guildName}] ⏱️  Auto-disconnect countdown started: 5:00 remaining (not playing)`);
+    console.log(`[${guildName}] ⏱️  Auto-disconnect countdown started: 2:30 remaining (not playing)`);
 }
 // Kazagumo player events
 client.manager.on('playerStart', (player, track) => {
