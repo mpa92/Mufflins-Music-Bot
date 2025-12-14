@@ -411,21 +411,28 @@ client.manager.on('playerEnd', async (player) => {
         }
     }
     
-    // Ensure queue advancement when loop is off
-    // Kazagumo should handle this automatically, but we'll ensure it happens
-    if (player.loop === 'none' && player.queue.size > 0 && !player.playing && !player.paused) {
-        // Small delay to ensure track is fully ended before playing next
-        setTimeout(async () => {
-            try {
-                // Double-check conditions before playing
-                if (player.queue.size > 0 && !player.playing && !player.paused && player.loop === 'none') {
-                    console.log(`[${player.guildId}] ▶️  Auto-advancing to next track in queue (${player.queue.size} remaining)`);
-                    await player.play();
-                }
-            } catch (error) {
-                console.error(`[${player.guildId}] ❌ Error auto-advancing queue:`, error?.message || error);
+    // Kazagumo automatically handles queue advancement and loop modes
+    // DO NOT manually call player.play() here as it causes tracks to replay incorrectly
+    // The looping issue is likely caused by:
+    // 1. Loop mode being set incorrectly
+    // 2. Kazagumo's automatic advancement not working (rare)
+    // 3. Tracks being added to queue incorrectly
+    
+    // Log detailed state for debugging
+    console.log(`[${player.guildId}] 🔍 Queue state after track end:`);
+    console.log(`[${player.guildId}]   - Loop mode: ${player.loop}`);
+    console.log(`[${player.guildId}]   - Queue size: ${player.queue.size}`);
+    console.log(`[${player.guildId}]   - Current track: ${player.queue.current?.title || 'None'}`);
+    console.log(`[${player.guildId}]   - Playing: ${player.playing}, Paused: ${player.paused}`);
+    
+    // Only log a warning if queue should advance but isn't (after 2 seconds)
+    if (player.loop === 'none' && player.queue.size > 0) {
+        setTimeout(() => {
+            if (!player.playing && !player.paused && player.queue.size > 0 && player.loop === 'none') {
+                console.warn(`[${player.guildId}] ⚠️  WARNING: Queue has ${player.queue.size} tracks but player is not advancing!`);
+                console.warn(`[${player.guildId}]   This might indicate a Kazagumo bug or configuration issue.`);
             }
-        }, 300);
+        }, 2000);
     }
     
     // Check if we should start auto-disconnect timer
