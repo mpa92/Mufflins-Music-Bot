@@ -338,9 +338,14 @@ client.manager.on('playerEnd', async (player) => {
             const percentagePlayed = (playDuration / track.length) * 100;
             console.log(`[${player.guildId}] 📊 Spotify track play duration: ${playDuration}ms (expected: ${track.length}ms, ${percentagePlayed.toFixed(1)}%)`);
             
-            // More strict threshold for Spotify - only retry if less than 50% played (indicates real failure)
-            // This prevents false positives from tracks that end normally
-            if (percentagePlayed < 50 && playDuration < 30000) {
+            // Retry if track ended prematurely - focus on percentage played
+            // Retry conditions:
+            // 1. Less than 50% of track played (indicates stream failure)
+            // 2. Track played for less than 60 seconds (catches early failures)
+            // 3. Track is longer than 10 seconds (avoids false positives on very short tracks)
+            const shouldRetry = percentagePlayed < 50 && playDuration < 60000 && track.length > 10000;
+            
+            if (shouldRetry) {
                 console.warn(`[${player.guildId}] ⚠️  Spotify track ended prematurely (${playDuration}ms / expected ${track.length}ms, only ${percentagePlayed.toFixed(1)}% played)`);
                 
                 const channel = client.channels.cache.get(player.textId);
@@ -375,9 +380,15 @@ client.manager.on('playerEnd', async (player) => {
                                     player.queue.unshift(ytTrack);
                                 }
                                 
-                                // Only play if not already playing
-                                if (!player.playing && !player.paused) {
-                                    await player.play();
+                                // Force play the retry track (even if player thinks it's playing)
+                                // This handles cases where player state is incorrect after premature track end
+                                try {
+                                    await player.play(ytTrack);
+                                } catch (playError) {
+                                    // If direct play fails, try without specifying track
+                                    if (!player.playing) {
+                                        await player.play();
+                                    }
                                 }
                                 
                                 console.log(`[${player.guildId}] ✅ Retrying with YouTube: ${ytTrack.title}`);
