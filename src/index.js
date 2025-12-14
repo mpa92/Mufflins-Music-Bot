@@ -318,39 +318,34 @@ client.manager.on('playerEmpty', (player) => {
     playerEmptyEvent(client, player);
 });
 
-client.manager.on('playerEnd', (player) => {
+client.manager.on('playerEnd', async (player) => {
     const playerEndEvent = require('./events/playerEnd');
     playerEndEvent(client, player);
     
-    // Check if we should start auto-disconnect timer
-    // Only if queue is empty, not playing, and no autoplay
-    if (player.queue.size === 0 && !player.playing && !player.paused) {
-        const autoplayEnabled = player.data.get("autoplay");
-        if (!autoplayEnabled) {
-            startAutoDisconnectTimer(player.guildId);
-        }
-    }
-    
-    // Check if track ended too quickly - indicates stream failure
+    // Get the track that just ended for retry logic
     const trackInfo = trackStartTimes.get(player.guildId);
-    if (trackInfo && !trackInfo.hasRetried) {
+    const endedTrack = trackInfo?.track || player.queue.previous || player.queue.current;
+    
+    // Check if track ended too quickly - indicates stream failure (only for Spotify tracks)
+    if (trackInfo && !trackInfo.hasRetried && endedTrack) {
         const playDuration = Date.now() - trackInfo.startTime;
         const track = trackInfo.track;
         
-        // Always log the duration for debugging
-        const percentagePlayed = (playDuration / track.length) * 100;
-        console.log(`[${player.guildId}] 📊 Track play duration: ${playDuration}ms (expected: ${track.length}ms, ${percentagePlayed.toFixed(1)}%)`);
+        // Only check for premature ending if it's a Spotify track
+        const isSpotifyTrack = track?.uri && track.uri.includes('spotify.com');
         
-        // If track ended before completing 90% - likely a stream failure or timeout
-        // This catches both instant failures AND tracks that stop mid-playback
-        if (percentagePlayed < 90 && track.length > 10000) {
-            console.warn(`[${player.guildId}] ⚠️  Track ended prematurely (${playDuration}ms / expected ${track.length}ms, only ${percentagePlayed.toFixed(1)}% played)`);
+        if (isSpotifyTrack && track.length > 10000) {
+            const percentagePlayed = (playDuration / track.length) * 100;
+            console.log(`[${player.guildId}] 📊 Spotify track play duration: ${playDuration}ms (expected: ${track.length}ms, ${percentagePlayed.toFixed(1)}%)`);
             
-            // If it's a Spotify track, retry with YouTube search
-            if (track.uri && track.uri.includes('spotify.com')) {
+            // More strict threshold for Spotify - only retry if less than 50% played (indicates real failure)
+            // This prevents false positives from tracks that end normally
+            if (percentagePlayed < 50 && playDuration < 30000) {
+                console.warn(`[${player.guildId}] ⚠️  Spotify track ended prematurely (${playDuration}ms / expected ${track.length}ms, only ${percentagePlayed.toFixed(1)}% played)`);
+                
                 const channel = client.channels.cache.get(player.textId);
                 if (channel) {
-                    console.log(`[${player.guildId}] 🔄 Auto-retrying with YouTube search...`);
+                    console.log(`[${player.guildId}] 🔄 Auto-retrying Spotify track with YouTube search...`);
                     
                     const { EmbedBuilder } = require('discord.js');
                     channel.send({
@@ -367,14 +362,21 @@ client.manager.on('playerEnd', (player) => {
                     setTimeout(async () => {
                         try {
                             const searchQuery = `${track.author} ${track.title}`;
-                            const result = await player.search(searchQuery, { requester: track.requester });
+                            const result = await player.search(searchQuery, { requester: track.requester || { id: 'system' } });
                             
                             if (result.tracks.length > 0) {
                                 const ytTrack = result.tracks[0];
-                                ytTrack.requester = track.requester;
-                                player.queue.unshift(ytTrack); // Add to front of queue
+                                ytTrack.requester = track.requester || { id: 'system' };
                                 
-                                if (!player.playing) {
+                                // Add to front of queue if queue is empty, otherwise add after current
+                                if (player.queue.size === 0) {
+                                    player.queue.add(ytTrack);
+                                } else {
+                                    player.queue.unshift(ytTrack);
+                                }
+                                
+                                // Only play if not already playing
+                                if (!player.playing && !player.paused) {
                                     await player.play();
                                 }
                                 
@@ -398,12 +400,44 @@ client.manager.on('playerEnd', (player) => {
                             console.error(`[${player.guildId}] ❌ Retry error:`, err);
                         }
                     }, 500);
+                    
+                    // Clean up track info after retry
+                    setTimeout(() => {
+                        trackStartTimes.delete(player.guildId);
+                    }, 5000);
+                    return; // Exit early to prevent normal queue advancement interference
                 }
             }
         }
     }
     
-    // Clean up after a delay
+    // Ensure queue advancement when loop is off
+    // Kazagumo should handle this automatically, but we'll ensure it happens
+    if (player.loop === 'none' && player.queue.size > 0 && !player.playing && !player.paused) {
+        // Small delay to ensure track is fully ended before playing next
+        setTimeout(async () => {
+            try {
+                // Double-check conditions before playing
+                if (player.queue.size > 0 && !player.playing && !player.paused && player.loop === 'none') {
+                    console.log(`[${player.guildId}] ▶️  Auto-advancing to next track in queue (${player.queue.size} remaining)`);
+                    await player.play();
+                }
+            } catch (error) {
+                console.error(`[${player.guildId}] ❌ Error auto-advancing queue:`, error?.message || error);
+            }
+        }, 300);
+    }
+    
+    // Check if we should start auto-disconnect timer
+    // Only if queue is empty, not playing, and no autoplay
+    if (player.queue.size === 0 && !player.playing && !player.paused) {
+        const autoplayEnabled = player.data.get("autoplay");
+        if (!autoplayEnabled) {
+            startAutoDisconnectTimer(player.guildId);
+        }
+    }
+    
+    // Clean up track info after a delay (if not already cleaned up)
     setTimeout(() => {
         trackStartTimes.delete(player.guildId);
     }, 10000);
@@ -535,45 +569,74 @@ client.manager.on('playerException', (player, track, error) => {
                 }]
             }).catch(() => {});
         }
-        // Handle Spotify/Youtube mirroring errors (400, 401, 403) - auto-retry with SoundCloud
+        // Handle Spotify/Youtube mirroring errors (400, 401, 403) - auto-retry with YouTube search
         else if (errorStr.includes('invalid status code') && (errorStr.includes('400') || errorStr.includes('401') || errorStr.includes('403'))) {
             // Check if this is a Spotify track that failed
             if (track?.uri && track.uri.includes('spotify.com')) {
                 const trackInfo = track?.title && track?.author ? `${track.author} ${track.title}` : (track?.title || 'this track');
                 
-                // Auto-retry with SoundCloud search
+                // Check if we've already retried this track to prevent infinite loops
+                const retryKey = `${player.guildId}_${track.identifier || track.uri}`;
+                if (player.data.get(`retry_${retryKey}`)) {
+                    console.log(`[${player.guildId}] Already retried this Spotify track, skipping auto-retry`);
+                    channel.send({
+                        embeds: [{
+                            color: 0x8e7cc3,
+                            description: `\`❌\` | **Failed to play Spotify track**\n\nTrack: ${trackInfo}\n\nTry: \`mm!play ${trackInfo}\``
+                        }]
+                    }).catch(() => {});
+                    return;
+                }
+                
+                // Mark as retried
+                player.data.set(`retry_${retryKey}`, true);
+                setTimeout(() => player.data.delete(`retry_${retryKey}`), 60000); // Clear after 1 minute
+                
+                // Auto-retry with YouTube search (more reliable than SoundCloud)
                 channel.send({
                     embeds: [{
                         color: 0x8e7cc3,
-                        description: `\`⚠️\` | **YouTube mirroring failed, trying SoundCloud...**\n\nTrack: ${trackInfo}`
+                        description: `\`⚠️\` | **Spotify track failed, trying YouTube...**\n\nTrack: ${trackInfo}`
                     }]
                 }).catch(() => {});
                 
-                // Try to find and play from SoundCloud
+                // Try to find and play from YouTube
                 setTimeout(async () => {
                     try {
-                        const scResult = await player.search(`scsearch:${trackInfo}`, { id: 'auto-retry' });
-                        if (scResult.tracks.length > 0) {
-                            const scTrack = scResult.tracks[0];
-                            scTrack.requester = { id: 'system' };
-                            player.queue.unshift(scTrack); // Add to front of queue
-                            await player.play();
+                        const searchQuery = trackInfo;
+                        const ytResult = await player.search(`ytsearch:${searchQuery}`, { requester: track.requester || { id: 'system' } });
+                        if (ytResult.tracks.length > 0) {
+                            const ytTrack = ytResult.tracks[0];
+                            ytTrack.requester = track.requester || { id: 'system' };
+                            
+                            // Add to front of queue if queue is empty, otherwise add after current
+                            if (player.queue.size === 0) {
+                                player.queue.add(ytTrack);
+                            } else {
+                                player.queue.unshift(ytTrack);
+                            }
+                            
+                            // Only play if not already playing
+                            if (!player.playing && !player.paused) {
+                                await player.play();
+                            }
+                            
                             channel.send({
                                 embeds: [{
                                     color: 0x8e7cc3,
-                                    description: `\`✅\` | **Playing from SoundCloud:** ${scTrack.title}`
+                                    description: `\`✅\` | **Playing from YouTube:** ${ytTrack.title}`
                                 }]
                             }).catch(() => {});
                         } else {
                             channel.send({
                                 embeds: [{
                                     color: 0x8e7cc3,
-                                    description: `\`❌\` | **SoundCloud search failed too**\n\nTry: \`mm!play ${trackInfo}\``
+                                    description: `\`❌\` | **YouTube search failed**\n\nTry: \`mm!play ${trackInfo}\``
                                 }]
                             }).catch(() => {});
                         }
                     } catch (retryError) {
-                        console.error(`[${player.guildId}] SoundCloud retry error:`, retryError);
+                        console.error(`[${player.guildId}] YouTube retry error:`, retryError);
                     }
                 }, 500);
             } else {
