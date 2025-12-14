@@ -373,31 +373,31 @@ client.manager.on('playerEnd', async (player) => {
                                 const ytTrack = result.tracks[0];
                                 ytTrack.requester = track.requester || { id: 'system' };
                                 
-                                // Add to front of queue if queue is empty, otherwise add after current
-                                if (player.queue.size === 0) {
-                                    player.queue.add(ytTrack);
-                                } else {
-                                    player.queue.unshift(ytTrack);
-                                }
-                                
-                                // Force play the retry track (even if player thinks it's playing)
-                                // This handles cases where player state is incorrect after premature track end
+                                // Play the retry track directly WITHOUT adding to queue
+                                // This prevents the track from being replayed when it ends
+                                // If we add it to queue first, Kazagumo will replay it when it finishes
                                 try {
+                                    // Play directly - this replaces the current track without adding to queue
                                     await player.play(ytTrack);
+                                    console.log(`[${player.guildId}] ✅ Retrying with YouTube: ${ytTrack.title}`);
+                                    channel.send({
+                                        embeds: [new EmbedBuilder()
+                                            .setColor(0x8e7cc3)
+                                            .setDescription(`\`✅\` | **Now playing from YouTube:** ${ytTrack.title}`)
+                                        ]
+                                    }).catch(() => {});
                                 } catch (playError) {
-                                    // If direct play fails, try without specifying track
-                                    if (!player.playing) {
-                                        await player.play();
+                                    console.error(`[${player.guildId}] ❌ Error playing retry track:`, playError?.message || playError);
+                                    // Fallback: add to queue only if direct play fails
+                                    if (player.queue.size === 0) {
+                                        player.queue.add(ytTrack);
+                                        if (!player.playing) {
+                                            await player.play();
+                                        }
+                                    } else {
+                                        player.queue.unshift(ytTrack);
                                     }
                                 }
-                                
-                                console.log(`[${player.guildId}] ✅ Retrying with YouTube: ${ytTrack.title}`);
-                                channel.send({
-                                    embeds: [new EmbedBuilder()
-                                        .setColor(0x8e7cc3)
-                                        .setDescription(`\`✅\` | **Now playing from YouTube:** ${ytTrack.title}`)
-                                    ]
-                                }).catch(() => {});
                             } else {
                                 console.error(`[${player.guildId}] ❌ YouTube search failed for: ${searchQuery}`);
                                 channel.send({
@@ -627,24 +627,28 @@ client.manager.on('playerException', (player, track, error) => {
                             const ytTrack = ytResult.tracks[0];
                             ytTrack.requester = track.requester || { id: 'system' };
                             
-                            // Add to front of queue if queue is empty, otherwise add after current
-                            if (player.queue.size === 0) {
-                                player.queue.add(ytTrack);
-                            } else {
-                                player.queue.unshift(ytTrack);
+                            // Play the retry track directly WITHOUT adding to queue
+                            // This prevents the track from being replayed when it ends
+                            try {
+                                await player.play(ytTrack);
+                                channel.send({
+                                    embeds: [{
+                                        color: 0x8e7cc3,
+                                        description: `\`✅\` | **Playing from YouTube:** ${ytTrack.title}`
+                                    }]
+                                }).catch(() => {});
+                            } catch (playError) {
+                                console.error(`[${player.guildId}] Error playing retry track:`, playError?.message || playError);
+                                // Fallback: add to queue only if direct play fails
+                                if (player.queue.size === 0) {
+                                    player.queue.add(ytTrack);
+                                    if (!player.playing) {
+                                        await player.play();
+                                    }
+                                } else {
+                                    player.queue.unshift(ytTrack);
+                                }
                             }
-                            
-                            // Only play if not already playing
-                            if (!player.playing && !player.paused) {
-                                await player.play();
-                            }
-                            
-                            channel.send({
-                                embeds: [{
-                                    color: 0x8e7cc3,
-                                    description: `\`✅\` | **Playing from YouTube:** ${ytTrack.title}`
-                                }]
-                            }).catch(() => {});
                         } else {
                             channel.send({
                                 embeds: [{
