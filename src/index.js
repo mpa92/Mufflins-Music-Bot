@@ -113,7 +113,7 @@ const prefixCommandFolders = fs.readdirSync("./src/prefix");
     client.handleEvents(eventFiles, "./src/events");
     
     // Wait for client to be ready before handling commands
-    client.once('ready', () => {
+    client.once('clientReady', () => {
         console.log(`✅ Bot is online as ${client.user.tag}`);
         console.log(`🆔 Bot Client ID: ${client.user.id}`);
         console.log(`🔗 Invite Link: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=36703232&scope=bot%20applications.commands`);
